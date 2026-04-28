@@ -23,18 +23,25 @@ const Navbar = () => {
   const userInitials = userName.split(' ').map(n => n[0]).join('');
 
   return (
-    <header className="navbar">
-      {/* LEFT SIDE - Search Bar */}
-      <div className="navbar-left">
-        <form onSubmit={handleSearch} className="search-form">
-          <div className="input-wrap">
-            <Search size={16} className="input-icon" />
+    <header className="navbar" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+      
+      {/* LEFT SIDE */}
+      <div className="navbar-left" style={{ display: "flex", alignItems: "center", gap: "12px", flex: 1 }}>
+        
+        {/* ✅ FIXED SEARCH BAR */}
+        <form 
+          onSubmit={handleSearch} 
+          className="search-form"
+        >
+          <div className="input-wrap" style={{ position: "relative", width: "100%" }}>
+            <Search size={16} className="input-icon" style={{ position: "absolute", left: "8px", top: "50%", transform: "translateY(-50%)" }} />
             <input
               type="text"
               placeholder="Search students, parents, staff..."
               className="form-input"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
+              style={{ width: "100%", paddingLeft: "30px" }}
             />
           </div>
         </form>
@@ -46,8 +53,9 @@ const Navbar = () => {
         </select>
       </div>
 
-      {/* RIGHT SIDE - Actions & Profile */}
-      <div className="navbar-right">
+      {/* RIGHT SIDE */}
+      <div className="navbar-right" style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+        
         <Link to="/refund-management">
           <button className="btn btn-primary btn-sm">
             Refund Management
@@ -66,13 +74,12 @@ const Navbar = () => {
           </button>
         </Link>
 
-        {/* Notifications */}
         <div className="notification-icon">
           <Bell size={18} />
           <span className="notification-badge">3</span>
         </div>
 
-        {/* User Profile Dropdown */}
+        {/* PROFILE */}
         <div className="profile-dropdown">
           <button 
             className="profile-trigger"
@@ -95,16 +102,21 @@ const Navbar = () => {
                   <div className="dropdown-user-role">School Administrator</div>
                 </div>
               </div>
+
               <div className="dropdown-divider"></div>
+
               <Link to="/profile" className="dropdown-item" onClick={() => setShowProfileMenu(false)}>
                 <User size={14} />
                 My Profile
               </Link>
+
               <Link to="/settings" className="dropdown-item" onClick={() => setShowProfileMenu(false)}>
                 <Settings size={14} />
                 Settings
               </Link>
+
               <div className="dropdown-divider"></div>
+
               <button className="dropdown-item logout" onClick={handleLogout}>
                 <LogOut size={14} />
                 Logout

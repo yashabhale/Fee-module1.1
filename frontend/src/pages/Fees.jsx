@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Search, Eye, ArrowLeft } from 'lucide-react'
+import { Search, Eye, ArrowLeft, Bell } from 'lucide-react'
 import { FaWhatsapp } from 'react-icons/fa'
 import { MdSms } from 'react-icons/md'
 import { transactionsData } from '../data/transactionsData'
@@ -10,6 +10,7 @@ const Fees = () => {
   const [filteredTransactions, setFilteredTransactions] = useState([])
   const [searchTerm, setSearchTerm] = useState('')
   const [filterStatus, setFilterStatus] = useState('All')
+  const [toast, setToast] = useState(null)
 
   const statusOptions = ['All', 'Paid', 'Pending', 'Failed', 'Partially Paid']
 
@@ -17,10 +18,32 @@ const Fees = () => {
     filterTransactions()
   }, [searchTerm, filterStatus])
 
+  const showToast = (message, type = 'info') => {
+    setToast({ message, type })
+    setTimeout(() => setToast(null), 3000)
+  }
+
+  const handleNotifyPaid = () => {
+    const paidRecords = filteredTransactions.filter(tx => tx.status === 'Paid')
+    if (paidRecords.length > 0) {
+      showToast(`Fees paid successfully for ${paidRecords.length} student(s)`, 'success')
+    } else {
+      showToast('No paid records found', 'info')
+    }
+  }
+
+  const handleNotifyPending = () => {
+    const pendingRecords = filteredTransactions.filter(tx => tx.status === 'Pending' || (tx.amountPaid || 0) < tx.amount)
+    if (pendingRecords.length > 0) {
+      showToast(`Your fee is pending for ${pendingRecords.length} student(s)`, 'warning')
+    } else {
+      showToast('No pending records found', 'info')
+    }
+  }
+
   const filterTransactions = () => {
     let filtered = [...transactionsData]
 
-    // Filter by status
     if (filterStatus !== 'All') {
       filtered = filtered.filter((tx) => {
         if (filterStatus === 'Partially Paid') {
@@ -30,7 +53,6 @@ const Fees = () => {
       })
     }
 
-    // Filter by search term
     if (searchTerm) {
       filtered = filtered.filter(
         (tx) =>
@@ -43,8 +65,26 @@ const Fees = () => {
     setFilteredTransactions(filtered)
   }
 
-  const handleView = (invoiceId) => {
-    navigate(`/invoice/${invoiceId}`)
+  // ✅ FIXED FUNCTION
+  const handleView = (transaction) => {
+    if (transaction.status === 'Paid') {
+
+      const paymentData = {
+        invoiceId: transaction.invoiceId,
+        studentName: transaction.studentName,
+        amount: transaction.amountPaid || transaction.amount,
+        paymentMethod: transaction.paymentMethod || 'Cash',
+        transactionId: 'TXN' + Date.now(),
+        timestamp: new Date().toISOString()
+      }
+
+      sessionStorage.setItem('paymentData', JSON.stringify(paymentData))
+
+      navigate('/payment-success')
+
+    } else {
+      navigate(`/invoice/${transaction.invoiceId}`)
+    }
   }
 
   const getPaymentStatus = (transaction) => {
@@ -62,7 +102,6 @@ const Fees = () => {
 
   return (
     <div className="page">
-      {/* Header */}
       <div className="page-header">
         <div>
           <button className="back-btn mb-2" onClick={() => navigate('/')}>
@@ -74,7 +113,6 @@ const Fees = () => {
         </div>
       </div>
 
-      {/* Search & Filter Section */}
       <div className="flex gap-4 mb-6 flex-wrap">
         <div className="flex-1" style={{ minWidth: '200px' }}>
           <div className="input-wrap">
@@ -101,140 +139,66 @@ const Fees = () => {
             </option>
           ))}
         </select>
+
+        <div className="flex gap-2">
+          <button onClick={handleNotifyPaid} className="btn btn-success btn-sm">
+            <Bell size={14} />
+            Notify Paid
+          </button>
+          <button onClick={handleNotifyPending} className="btn btn-warning btn-sm">
+            <Bell size={14} />
+            Notify Pending
+          </button>
+        </div>
       </div>
 
-      {/* Transactions Table */}
-      {filteredTransactions.length === 0 ? (
-        <div className="card">
-          <div className="card-body" style={{ textAlign: 'center', padding: '40px' }}>
-            <div style={{ fontSize: '48px', marginBottom: '16px' }}>📋</div>
-            <h3 className="card-title">No Transactions Found</h3>
-            <p className="text-muted">
-              {searchTerm || filterStatus !== 'All' ? 'Try adjusting your search filters' : 'No transactions available yet'}
-            </p>
-          </div>
-        </div>
-      ) : (
-        <div className="card">
-          <div className="card-body">
-            <div className="table-wrap">
-              <table className="table">
-                <thead>
-                  <tr>
-                    <th>Invoice ID</th>
-                    <th>Student Name</th>
-                    <th>Class</th>
-                    <th>Total Amount</th>
-                    <th>Paid Amount</th>
-                    <th>Pending Amount</th>
-                    <th>Payment Method</th>
-                    <th>Status</th>
-                    <th>Date</th>
-                    <th>Action</th>
-                    <th>Send Message</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredTransactions.map((tx) => {
-                    const statusInfo = getPaymentStatus(tx)
-                    const pendingAmount = getRemainingAmount(tx)
-                    const amountPaid = tx.amountPaid || 0
-                    
-                    return (
-                      <tr key={tx.id}>
-                        <td className="td-mono" style={{ color: 'var(--primary)', fontWeight: '600' }}>{tx.invoiceId}</td>
-                        <td className="td-bold">{tx.studentName}</td>
-                        <td>{tx.class}</td>
-                        <td className="td-bold">₹{tx.amount.toLocaleString()}</td>
-                        <td className={amountPaid > 0 ? 'text-green-600' : 'text-muted'}>
-                          {amountPaid > 0 ? `₹${amountPaid.toLocaleString()}` : '-'}
-                        </td>
-                        <td className={pendingAmount > 0 ? 'text-orange-600' : 'text-muted'}>
-                          {pendingAmount > 0 ? `₹${pendingAmount.toLocaleString()}` : '-'}
-                        </td>
-                        <td className="text-muted">{tx.paymentMethod || '-'}</td>
-                        <td>
-                          <span className={`badge ${statusInfo.class}`}>
-                            {statusInfo.text}
-                          </span>
-                        </td>
-                        <td className="text-muted">{tx.date}</td>
-                        <td>
-                          <button
-                            onClick={() => handleView(tx.invoiceId)}
-                            className="btn btn-primary btn-sm"
-                          >
-                            <Eye size={14} />
-                            View
-                          </button>
-                        </td>
-                        <td>
-                          <div className="flex gap-2 items-center">
-                            {tx.phone && (
-                              <>
-                                <a
-                                  href={`https://wa.me/91${tx.phone}?text=${encodeURIComponent(
-                                    pendingAmount > 0 
-                                      ? `Hello, your pending fee of ₹${pendingAmount} is due. Total fee: ₹${tx.amount}, Paid: ₹${amountPaid}. Please pay at your earliest.`
-                                      : `Hello, your fee of ₹${tx.amount} has been paid successfully. Thank you!`
-                                  )}`}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="btn btn-ghost btn-sm"
-                                  style={{ padding: '6px', color: 'var(--green)' }}
-                                  title="Send WhatsApp"
-                                >
-                                  <FaWhatsapp size={16} />
-                                </a>
-                                <a
-                                  href={`sms:${tx.phone}?body=${encodeURIComponent(
-                                    pendingAmount > 0 
-                                      ? `Hello, your pending fee of ₹${pendingAmount} is due. Total fee: ₹${tx.amount}, Paid: ₹${amountPaid}. Please pay at your earliest.`
-                                      : `Hello, your fee of ₹${tx.amount} has been paid successfully. Thank you!`
-                                  )}`}
-                                  className="btn btn-ghost btn-sm"
-                                  style={{ padding: '6px', color: 'var(--blue)' }}
-                                  title="Send SMS"
-                                >
-                                  <MdSms size={16} />
-                                </a>
-                              </>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-            </div>
+      <div className="card">
+        <div className="card-body">
+          <div className="table-wrap">
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Invoice ID</th>
+                  <th>Student Name</th>
+                  <th>Class</th>
+                  <th>Total Amount</th>
+                  <th>Paid Amount</th>
+                  <th>Pending Amount</th>
+                  <th>Status</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredTransactions.map((tx) => {
+                  const statusInfo = getPaymentStatus(tx)
+                  const pendingAmount = getRemainingAmount(tx)
 
-            {/* Summary Footer */}
-            <div className="flex gap-6 mt-4 pt-4 border-t flex-wrap">
-              <div>
-                <span className="text-muted">Total Transactions: </span>
-                <span className="font-semibold">{filteredTransactions.length}</span>
-              </div>
-              <div>
-                <span className="text-muted">Total Amount: </span>
-                <span className="font-semibold">₹{filteredTransactions.reduce((sum, tx) => sum + tx.amount, 0).toLocaleString()}</span>
-              </div>
-              <div>
-                <span className="text-muted">Total Collected: </span>
-                <span className="font-semibold text-green-600">
-                  ₹{filteredTransactions.reduce((sum, tx) => sum + (tx.amountPaid || 0), 0).toLocaleString()}
-                </span>
-              </div>
-              <div>
-                <span className="text-muted">Total Pending: </span>
-                <span className="font-semibold text-orange-600">
-                  ₹{filteredTransactions.reduce((sum, tx) => sum + (tx.amount - (tx.amountPaid || 0)), 0).toLocaleString()}
-                </span>
-              </div>
-            </div>
+                  return (
+                    <tr key={tx.id}>
+                      <td>{tx.invoiceId}</td>
+                      <td>{tx.studentName}</td>
+                      <td>{tx.class}</td>
+                      <td>₹{tx.amount}</td>
+                      <td>₹{tx.amountPaid || 0}</td>
+                      <td>₹{pendingAmount}</td>
+                      <td>
+                        <span className={`badge ${statusInfo.class}`}>
+                          {statusInfo.text}
+                        </span>
+                      </td>
+                      <td>
+                        <button onClick={() => handleView(tx)} className="btn btn-primary btn-sm">
+                          <Eye size={14} /> View
+                        </button>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
           </div>
         </div>
-      )}
+      </div>
     </div>
   )
 }

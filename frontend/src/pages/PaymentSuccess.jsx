@@ -51,11 +51,10 @@ For any queries, contact: accounts@sacredtree.edu.in
     navigate('/')
   }
 
-  const handleViewInvoice = () => {
-    if (paymentData?.invoiceId) {
-      navigate(`/invoice/${paymentData.invoiceId}`)
-    }
-  }
+ const handleViewInvoice = () => {
+  navigate('/fees')
+}
+
 
   // Format date nicely
   const getFormattedDate = () => {
@@ -167,7 +166,7 @@ For any queries, contact: accounts@sacredtree.edu.in
             {paymentData?.invoiceId && (
               <button className="btn btn-outline btn-large" onClick={handleViewInvoice}>
                 <FileText size={18} />
-                View Invoice
+               Back to Payment Monitoring
               </button>
             )}
             <button className="btn btn-outline btn-large" onClick={handleBackToDashboard}>

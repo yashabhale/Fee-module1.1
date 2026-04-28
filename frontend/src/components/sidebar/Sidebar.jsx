@@ -22,7 +22,7 @@ import {
 } from 'lucide-react'
 
 const mainMenuItems = [
-  { label: 'Dashboard', icon: Home, path: '/Dashboard' },
+  { label: 'Dashboard', icon: Home, path: '/' },
   { label: 'Students', icon: GraduationCap, path: '/students' },
   { label: 'Admissions', icon: UserCheck, path: '/admissions' },
   { label: 'Attendance', icon: ClipboardList, path: '/attendance' },
