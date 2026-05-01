@@ -317,4 +317,131 @@ export const testConnection = async () => {
   }
 }
 
+// ==================== REFUND MANAGEMENT ====================
+
+/**
+ * Create a new refund request
+ * @param {Object} refundData - Refund request details
+ * @returns {Promise<{success: boolean, data?: Object, error?: string}>}
+ */
+export const createRefundRequest = async (refundData) => {
+  try {
+    console.log('💰 Submitting refund request...')
+    console.log('   Refund data:', refundData)
+    
+    const response = await api.post('/refunds', refundData)
+    
+    console.log('✅ Refund request submitted successfully')
+    console.log('   Response:', response.data)
+    
+    return { 
+      success: true, 
+      data: response.data?.data || response.data,
+      message: response.data?.message || 'Refund request submitted successfully'
+    }
+  } catch (error) {
+    const errorMessage = formatErrorMessage(error, 'refund request submission')
+    console.error('💰 Refund Error:', errorMessage)
+    return { 
+      success: false, 
+      error: errorMessage, 
+      details: error 
+    }
+  }
+}
+
+/**
+ * Fetch all refund requests
+ * @param {Object} filters - Filter options (status, student, page, limit)
+ * @returns {Promise<{success: boolean, data?: Object, error?: string}>}
+ */
+export const fetchRefundRequests = async (filters = {}) => {
+  try {
+    console.log('📋 Fetching refund requests...')
+    
+    const params = new URLSearchParams()
+    if (filters.status) params.append('status', filters.status)
+    if (filters.student) params.append('student', filters.student)
+    if (filters.page) params.append('page', filters.page)
+    if (filters.limit) params.append('limit', filters.limit)
+    
+    const queryString = params.toString() ? `?${params.toString()}` : ''
+    const response = await api.get(`/refunds${queryString}`)
+    
+    console.log('✅ Refund requests loaded successfully')
+    return { 
+      success: true, 
+      data: response.data?.data || response.data 
+    }
+  } catch (error) {
+    const errorMessage = formatErrorMessage(error, 'refund requests')
+    console.error('📋 Refund Error:', errorMessage)
+    return { 
+      success: false, 
+      error: errorMessage, 
+      details: error 
+    }
+  }
+}
+
+/**
+ * Approve a refund request
+ * @param {string} refundId - Refund request ID
+ * @param {Object} approvalData - Approval data (notes)
+ * @returns {Promise<{success: boolean, data?: Object, error?: string}>}
+ */
+export const approveRefundRequest = async (refundId, approvalData = {}) => {
+  try {
+    console.log(`💰 Approving refund request ${refundId}...`)
+    
+    const response = await api.post(`/refunds/${refundId}/approve`, approvalData)
+    
+    console.log('✅ Refund request approved successfully')
+    return { 
+      success: true, 
+      data: response.data?.data || response.data,
+      message: response.data?.message || 'Refund request approved'
+    }
+  } catch (error) {
+    const errorMessage = formatErrorMessage(error, 'refund approval')
+    console.error('💰 Refund Error:', errorMessage)
+    return { 
+      success: false, 
+      error: errorMessage, 
+      details: error 
+    }
+  }
+}
+
+/**
+ * Reject a refund request
+ * @param {string} refundId - Refund request ID
+ * @param {string} rejectionReason - Reason for rejection
+ * @returns {Promise<{success: boolean, data?: Object, error?: string}>}
+ */
+export const rejectRefundRequest = async (refundId, rejectionReason) => {
+  try {
+    console.log(`💰 Rejecting refund request ${refundId}...`)
+    
+    const response = await api.post(`/refunds/${refundId}/reject`, { 
+      rejectionReason 
+    })
+    
+    console.log('✅ Refund request rejected successfully')
+    return { 
+      success: true, 
+      data: response.data?.data || response.data,
+      message: response.data?.message || 'Refund request rejected'
+    }
+  } catch (error) {
+    const errorMessage = formatErrorMessage(error, 'refund rejection')
+    console.error('💰 Refund Error:', errorMessage)
+    return { 
+      success: false, 
+      error: errorMessage, 
+      details: error 
+    }
+  }
+}
+
 export default api

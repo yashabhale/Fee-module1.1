@@ -1,9 +1,12 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
+import { createRefundRequest } from '../services/apiService';
 
 function RefundRequest() {
   const navigate = useNavigate();
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState(null);
 
   const [formData, setFormData] = useState({
     invoiceId: '',
@@ -19,48 +22,96 @@ function RefundRequest() {
       ...prev,
       [name]: value
     }));
+    setError(null); // Clear error when user starts typing
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
+    setError(null);
 
     // Validation
     if (!formData.invoiceId || !formData.studentName || !formData.amount || !formData.reason) {
-      alert('Please fill in all required fields');
+      setError('Please fill in all required fields');
       return;
     }
 
-    // Store data in sessionStorage
-    const refundData = {
-      requestId: 'RFD-' + Date.now(),
-      invoiceId: formData.invoiceId,
-      studentName: formData.studentName,
-      amount: formData.amount,
-      formattedAmount: `₹${parseInt(formData.amount).toLocaleString()}`,
-      reason: formData.reason,
-      notes: formData.notes,
-      status: 'Pending Review',
-      requestedDate: new Date().toISOString().split('T')[0]
-    };
-    
-    sessionStorage.setItem('newRefundData', JSON.stringify(refundData));
-    
-    // Navigate to success page with state
-    navigate('/refund/success', { 
-      state: { 
-        successData: {
-          requestId: refundData.requestId,
-          invoiceId: refundData.invoiceId,
-          amount: refundData.formattedAmount,
-          status: refundData.status
-        }
-      },
-      replace: true // Use replace to prevent back button issues
-    });
+    if (isSubmitting) return;
+
+    setIsSubmitting(true);
+
+    try {
+      // Map form fields to API requirements
+      // Since the backend expects specific fields, we'll map them accordingly
+      const refundPayload = {
+        feePayment: formData.invoiceId, // Map invoiceId as feePayment for now
+        amount: parseFloat(formData.amount),
+        reason: mapReason(formData.reason),
+        description: formData.notes,
+        refundMethod: 'bank_transfer',
+        // We'll leave bankDetails empty for now - can be filled later
+        bankDetails: {}
+      };
+
+      console.log('📤 Submitting refund request with payload:', refundPayload);
+
+      const response = await createRefundRequest(refundPayload);
+
+      if (response.success) {
+        console.log('✅ Refund request created successfully:', response.data);
+
+        // Store successful response data for display on success page
+        const refundData = {
+          requestId: response.data?._id || response.data?.requestId || 'RFD-' + Date.now(),
+          invoiceId: formData.invoiceId,
+          studentName: formData.studentName,
+          amount: formData.amount,
+          formattedAmount: `₹${parseInt(formData.amount).toLocaleString()}`,
+          reason: formData.reason,
+          notes: formData.notes,
+          status: response.data?.status || 'Pending Review',
+          requestedDate: new Date().toISOString().split('T')[0]
+        };
+
+        sessionStorage.setItem('newRefundData', JSON.stringify(refundData));
+
+        // Navigate to success page
+        navigate('/refund/success', {
+          state: {
+            successData: {
+              requestId: refundData.requestId,
+              invoiceId: refundData.invoiceId,
+              amount: refundData.formattedAmount,
+              status: refundData.status
+            }
+          },
+          replace: true
+        });
+      } else {
+        console.error('❌ Error creating refund request:', response.error);
+        setError(response.error || 'Failed to submit refund request. Please try again.');
+      }
+    } catch (err) {
+      console.error('❌ Error during submission:', err);
+      setError('An unexpected error occurred. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleCancel = () => {
     navigate('/refund-management');
+  };
+
+  // Map form reason to API reason values
+  const mapReason = (formReason) => {
+    const reasonMap = {
+      'Duplicate Payment': 'overpayment',
+      'Student Withdrawal': 'withdrawal',
+      'Overpayment': 'overpayment',
+      'Technical Error': 'other',
+      'Other': 'other'
+    };
+    return reasonMap[formReason] || 'other';
   };
 
   return (
@@ -77,6 +128,12 @@ function RefundRequest() {
         </div>
       </div>
 
+      {error && (
+        <div className="alert alert-error" style={{ marginBottom: '20px' }}>
+          <span>{error}</span>
+        </div>
+      )}
+
       <div className="card">
         <div className="card-body">
           <form onSubmit={handleSubmit}>
@@ -91,6 +148,7 @@ function RefundRequest() {
                 onChange={handleChange}
                 placeholder="INV-2024-001"
                 className="form-input"
+                disabled={isSubmitting}
               />
             </div>
 
@@ -105,6 +163,7 @@ function RefundRequest() {
                 onChange={handleChange}
                 placeholder="Enter student name"
                 className="form-input"
+                disabled={isSubmitting}
               />
             </div>
 
@@ -123,6 +182,7 @@ function RefundRequest() {
                   placeholder="Enter amount"
                   min="0"
                   step="1"
+                  disabled={isSubmitting}
                 />
               </div>
             </div>
@@ -136,6 +196,7 @@ function RefundRequest() {
                 value={formData.reason}
                 onChange={handleChange}
                 className="form-select"
+                disabled={isSubmitting}
               >
                 <option value="">Select a reason</option>
                 <option value="Duplicate Payment">Duplicate Payment</option>
@@ -155,15 +216,25 @@ function RefundRequest() {
                 className="form-textarea"
                 rows="4"
                 placeholder="Any additional information about this refund request..."
+                disabled={isSubmitting}
               />
             </div>
 
             <div className="flex gap-3 justify-end mt-4">
-              <button type="button" className="btn btn-outline" onClick={handleCancel}>
+              <button 
+                type="button" 
+                className="btn btn-outline" 
+                onClick={handleCancel}
+                disabled={isSubmitting}
+              >
                 Cancel
               </button>
-              <button type="submit" className="btn btn-primary">
-                Submit Refund Request
+              <button 
+                type="submit" 
+                className="btn btn-primary"
+                disabled={isSubmitting}
+              >
+                {isSubmitting ? 'Submitting...' : 'Submit Refund Request'}
               </button>
             </div>
           </form>
