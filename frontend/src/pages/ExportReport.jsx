@@ -1,193 +1,74 @@
-import React, { useState } from 'react'
-import { getDashboardMetrics, getMonthlyData, getPendingFeesData, getRecentTransactionsData } from '../data/dashboardData'
-import { invoiceDatabase } from '../data/invoiceData'
+import React, { useState, useEffect } from 'react'
+import { reportService } from '../services/reportService'
 
 const ExportReport = () => {
-  const [selectedReport, setSelectedReport] = useState('fee-collection')
-  const [exportFormat, setExportFormat] = useState('csv')
-  const [dateRange, setDateRange] = useState('all-time')
+  const [selectedReport, setSelectedReport] = useState('pdf')
+  const [loading, setLoading] = useState(false)
+  const [message, setMessage] = useState('')
+  const [isAuthenticated, setIsAuthenticated] = useState(false)
+  const [debugInfo, setDebugInfo] = useState('')
 
-  // Generate CSV content
-  const generateCSV = (data, headers) => {
-    const csvContent = [
-      headers.join(','),
-      ...data.map(row => headers.map(header => {
-        const value = row[header]
-        // Escape commas and quotes in values
-        return typeof value === 'string' && value.includes(',') ? `"${value}"` : value
-      }).join(','))
-    ].join('\n')
-    return csvContent
-  }
-
-  // Generate PDF (using a simple approach with text format)
-  const generatePDF = (reportTitle, content) => {
-    const timestamp = new Date().toLocaleString()
-    let pdfContent = `${reportTitle}\n`
-    pdfContent += `Generated on: ${timestamp}\n`
-    pdfContent += `${'='.repeat(50)}\n\n`
-    pdfContent += content
-    return pdfContent
-  }
-
-  // Fee Collection Report
-  const generateFeeCollectionReport = () => {
-    const data = [
-      {
-        Category: 'Total Collected',
-        Amount: dashboardMetrics.totalCollected,
-        Percentage: '100%'
-      },
-      {
-        Category: 'Total Pending',
-        Amount: dashboardMetrics.totalPending,
-        Percentage: Math.round((dashboardMetrics.totalPending / (dashboardMetrics.totalCollected + dashboardMetrics.totalPending)) * 100) + '%'
-      },
-      {
-        Category: 'Total Overdue',
-        Amount: dashboardMetrics.totalOverdue,
-        Percentage: Math.round((dashboardMetrics.totalOverdue / dashboardMetrics.totalCollected) * 100) + '%'
-      },
-      {
-        Category: 'Total Refund',
-        Amount: dashboardMetrics.totalRefund,
-        Percentage: Math.round((dashboardMetrics.totalRefund / dashboardMetrics.totalCollected) * 100) + '%'
-      }
-    ]
-
-    const headers = ['Category', 'Amount', 'Percentage']
-
-    if (exportFormat === 'csv') {
-      return generateCSV(data, headers)
-    } else {
-      return generatePDF('FEE COLLECTION REPORT', 
-        data.map(d => `${d.Category}: ₹${d.Amount} (${d.Percentage})`).join('\n')
-      )
-    }
-  }
-
-  // Monthly Fee Report
-  const generateMonthlyFeeReport = () => {
-    const data = monthlyData.map(month => ({
-      Month: month.month,
-      Collected: month.collected,
-      Pending: month.pending,
-      Total: month.collected + month.pending
-    }))
-
-    const headers = ['Month', 'Collected', 'Pending', 'Total']
-
-    if (exportFormat === 'csv') {
-      return generateCSV(data, headers)
-    } else {
-      return generatePDF('MONTHLY FEE REPORT', 
-        data.map(d => `${d.Month}: Collected ₹${d.Collected}, Pending ₹${d.Pending}, Total ₹${d.Total}`).join('\n')
-      )
-    }
-  }
-
-  // Pending Fees Report
-  const generatePendingFeesReport = () => {
-    const data = pendingFeesData.map(fee => ({
-      StudentName: fee.studentName,
-      Class: fee.class,
-      Amount: fee.amount,
-      DueDate: fee.dueDate,
-      DaysOverdue: Math.max(0, Math.floor((new Date() - new Date(fee.dueDate)) / (1000 * 60 * 60 * 24)))
-    }))
-
-    const headers = ['StudentName', 'Class', 'Amount', 'DueDate', 'DaysOverdue']
-
-    if (exportFormat === 'csv') {
-      return generateCSV(data, headers)
-    } else {
-      return generatePDF('PENDING FEES REPORT', 
-        data.map(d => `${d.StudentName} (${d.Class}): ₹${d.Amount} - Due: ${d.DueDate} (${d.DaysOverdue} days overdue)`).join('\n')
-      )
-    }
-  }
-
-  // All Invoices Report
-  const generateAllInvoicesReport = () => {
-    const data = Object.values(invoiceDatabase).map(invoice => ({
-      InvoiceId: invoice.invoiceId,
-      StudentName: invoice.studentName,
-      Class: invoice.class,
-      TotalAmount: invoice.totalAmount,
-      PaidAmount: invoice.paidAmount,
-      Status: invoice.status,
-      Date: invoice.invoiceDate
-    }))
-
-    const headers = ['InvoiceId', 'StudentName', 'Class', 'TotalAmount', 'PaidAmount', 'Status', 'Date']
-
-    if (exportFormat === 'csv') {
-      return generateCSV(data, headers)
-    } else {
-      return generatePDF('ALL INVOICES REPORT', 
-        data.map(d => `${d.InvoiceId} - ${d.StudentName} (${d.Class}): ₹${d.TotalAmount} | Paid: ₹${d.PaidAmount} | ${d.Status}`).join('\n')
-      )
-    }
-  }
-
-  // Transactions Report
-  const generateTransactionsReport = () => {
-    const data = recentTransactionsData.map(txn => ({
-      StudentName: txn.studentName,
-      Amount: txn.amount,
-      Date: txn.date,
-      Status: txn.status.charAt(0).toUpperCase() + txn.status.slice(1)
-    }))
-
-    const headers = ['StudentName', 'Amount', 'Date', 'Status']
-
-    if (exportFormat === 'csv') {
-      return generateCSV(data, headers)
-    } else {
-      return generatePDF('TRANSACTIONS REPORT', 
-        data.map(d => `${d.StudentName}: ₹${d.Amount} on ${d.Date} - ${d.Status}`).join('\n')
-      )
-    }
-  }
-
-  // Get the appropriate report content
-  const getReportContent = () => {
-    switch (selectedReport) {
-      case 'fee-collection':
-        return generateFeeCollectionReport()
-      case 'monthly-fee':
-        return generateMonthlyFeeReport()
-      case 'pending-fees':
-        return generatePendingFeesReport()
-      case 'all-invoices':
-        return generateAllInvoicesReport()
-      case 'transactions':
-        return generateTransactionsReport()
-      default:
-        return ''
-    }
-  }
-
-  // Download function
-  const handleExport = () => {
-    const content = getReportContent()
-    const reportNames = {
-      'fee-collection': 'Fee Collection Report',
-      'monthly-fee': 'Monthly Fee Report',
-      'pending-fees': 'Pending Fees Report',
-      'all-invoices': 'All Invoices Report',
-      'transactions': 'Transactions Report'
-    }
-
-    const fileName = `${reportNames[selectedReport]}_${new Date().toISOString().split('T')[0]}.${exportFormat === 'csv' ? 'csv' : 'txt'}`
+  // Check authentication status on component mount
+  useEffect(() => {
+    const token = localStorage.getItem('accessToken') || localStorage.getItem('authToken')
+    const isAuth = !!token
+    setIsAuthenticated(isAuth)
     
-    const element = document.createElement('a')
-    element.setAttribute('href', `data:text/plain;charset=utf-8,${encodeURIComponent(content)}`)
-    element.setAttribute('download', fileName)
-    element.style.display = 'none'
-    document.body.appendChild(element)
-    element.click()
-    document.body.removeChild(element)
+    if (!isAuth) {
+      setDebugInfo('⚠️ Not authenticated. No accessToken or authToken found in localStorage.')
+    } else {
+      setDebugInfo(`✅ Authenticated. Token: ${token.substring(0, 30)}...`)
+    }
+  }, [])
+
+  // Handle export function - calls backend API
+  const handleExport = async () => {
+    setLoading(true)
+    setMessage('')
+
+    // Check authentication before export
+    if (!isAuthenticated) {
+      setMessage('❌ Not authenticated. Please login first.')
+      setLoading(false)
+      return
+    }
+
+    try {
+      let result
+
+      console.log(`🚀 Exporting ${selectedReport}...`)
+
+      switch (selectedReport) {
+        case 'pdf':
+          result = await reportService.exportPDF()
+          break
+        case 'transactions-csv':
+          result = await reportService.exportTransactionsCSV(50)
+          break
+        case 'pending-csv':
+          result = await reportService.exportPendingPaymentsCSV(100)
+          break
+        case 'refunds-csv':
+          result = await reportService.exportRefundsCSV(50)
+          break
+        default:
+          result = { success: false, message: 'Invalid report type' }
+      }
+
+      if (result.success) {
+        setMessage(`✅ ${result.message}`)
+      } else {
+        setMessage(`❌ ${result.message}`)
+        if (result.details) {
+          console.error('API Error Details:', result.details)
+        }
+      }
+    } catch (error) {
+      console.error('Export error:', error)
+      setMessage(`❌ ${error.message || 'Failed to export report'}`)
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (
@@ -202,80 +83,158 @@ const ExportReport = () => {
             <h2 className="card-title">Export Options</h2>
           </div>
           <div className="card-body">
-            <div className="form-group">
-              <label>Select Report Type</label>
-              <select 
-                value={selectedReport} 
-                onChange={(e) => setSelectedReport(e.target.value)}
-                className="form-select"
-              >
-                <option value="fee-collection">Fee Collection Summary</option>
-                <option value="monthly-fee">Monthly Fee Report</option>
-                <option value="pending-fees">Pending Fees Report</option>
-                <option value="all-invoices">All Invoices Report</option>
-                <option value="transactions">Transactions Report</option>
-              </select>
+            {/* Authentication Status */}
+            <div style={{ 
+              marginBottom: '15px', 
+              padding: '10px', 
+              backgroundColor: isAuthenticated ? '#d4edda' : '#f8d7da',
+              color: isAuthenticated ? '#155724' : '#721c24',
+              borderRadius: '4px',
+              border: isAuthenticated ? '1px solid #c3e6cb' : '1px solid #f5c6cb',
+              fontSize: '0.9em'
+            }}>
+              {isAuthenticated ? '✅ Authenticated' : '⚠️ Not authenticated'}
             </div>
 
             <div className="form-group">
-              <label>Export Format</label>
-              <select 
-                value={exportFormat} 
-                onChange={(e) => setExportFormat(e.target.value)}
-                className="form-select"
-              >
-                <option value="csv">CSV (.csv)</option>
-                <option value="txt">Text (.txt)</option>
-              </select>
+              <label>Select Report Format</label>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '15px' }}>
+                <button 
+                  onClick={() => setSelectedReport('pdf')}
+                  disabled={loading}
+                  style={{
+                    padding: '12px',
+                    border: selectedReport === 'pdf' ? '2px solid #667eea' : '1px solid #ddd',
+                    borderRadius: '6px',
+                    backgroundColor: selectedReport === 'pdf' ? '#f0f4ff' : 'white',
+                    cursor: loading ? 'not-allowed' : 'pointer',
+                    fontWeight: selectedReport === 'pdf' ? '600' : '400',
+                    opacity: loading ? 0.6 : 1
+                  }}
+                >
+                  📄 PDF Report
+                </button>
+                <button 
+                  onClick={() => setSelectedReport('transactions-csv')}
+                  disabled={loading}
+                  style={{
+                    padding: '12px',
+                    border: selectedReport === 'transactions-csv' ? '2px solid #667eea' : '1px solid #ddd',
+                    borderRadius: '6px',
+                    backgroundColor: selectedReport === 'transactions-csv' ? '#f0f4ff' : 'white',
+                    cursor: loading ? 'not-allowed' : 'pointer',
+                    fontWeight: selectedReport === 'transactions-csv' ? '600' : '400',
+                    opacity: loading ? 0.6 : 1
+                  }}
+                >
+                  💳 Transactions
+                </button>
+                <button 
+                  onClick={() => setSelectedReport('pending-csv')}
+                  disabled={loading}
+                  style={{
+                    padding: '12px',
+                    border: selectedReport === 'pending-csv' ? '2px solid #667eea' : '1px solid #ddd',
+                    borderRadius: '6px',
+                    backgroundColor: selectedReport === 'pending-csv' ? '#f0f4ff' : 'white',
+                    cursor: loading ? 'not-allowed' : 'pointer',
+                    fontWeight: selectedReport === 'pending-csv' ? '600' : '400',
+                    opacity: loading ? 0.6 : 1
+                  }}
+                >
+                  ⏳ Pending Payments
+                </button>
+                <button 
+                  onClick={() => setSelectedReport('refunds-csv')}
+                  disabled={loading}
+                  style={{
+                    padding: '12px',
+                    border: selectedReport === 'refunds-csv' ? '2px solid #667eea' : '1px solid #ddd',
+                    borderRadius: '6px',
+                    backgroundColor: selectedReport === 'refunds-csv' ? '#f0f4ff' : 'white',
+                    cursor: loading ? 'not-allowed' : 'pointer',
+                    fontWeight: selectedReport === 'refunds-csv' ? '600' : '400',
+                    opacity: loading ? 0.6 : 1
+                  }}
+                >
+                  💰 Refund Requests
+                </button>
+              </div>
             </div>
 
-            <div className="form-group">
-              <label>Date Range</label>
-              <select 
-                value={dateRange} 
-                onChange={(e) => setDateRange(e.target.value)}
-                className="form-select"
-              >
-                <option value="all-time">All Time</option>
-                <option value="this-month">This Month</option>
-                <option value="last-month">Last Month</option>
-                <option value="last-quarter">Last Quarter</option>
-                <option value="this-year">This Year</option>
-              </select>
-            </div>
+            {message && (
+              <div style={{ 
+                marginBottom: '15px', 
+                padding: '12px', 
+                backgroundColor: message.includes('✅') ? '#d4edda' : '#f8d7da',
+                color: message.includes('✅') ? '#155724' : '#721c24',
+                borderRadius: '4px',
+                border: message.includes('✅') ? '1px solid #c3e6cb' : '1px solid #f5c6cb'
+              }}>
+                {message}
+              </div>
+            )}
 
-            <button onClick={handleExport} className="btn btn-primary">
-              📥 Download Report
+            <button 
+              onClick={handleExport} 
+              disabled={loading || !isAuthenticated}
+              className="btn btn-primary"
+              style={{ 
+                width: '100%',
+                opacity: loading || !isAuthenticated ? 0.6 : 1,
+                cursor: loading || !isAuthenticated ? 'not-allowed' : 'pointer'
+              }}
+            >
+              {loading ? '⏳ Exporting...' : '⬇️ Download Report'}
             </button>
+
+            {/* Debug Info */}
+            <div style={{ 
+              marginTop: '15px', 
+              padding: '10px', 
+              backgroundColor: '#f0f0f0',
+              borderRadius: '4px',
+              fontSize: '0.85em',
+              fontFamily: 'monospace',
+              color: '#333'
+            }}>
+              <strong>Debug Info:</strong>
+              <div>{debugInfo}</div>
+              <div>API URL: {import.meta.env.VITE_API_URL || 'http://localhost:5000'}</div>
+            </div>
           </div>
         </div>
 
         <div className="card">
           <div className="card-header">
-            <h2 className="card-title">Report Preview</h2>
+            <h2 className="card-title">📋 Available Reports</h2>
           </div>
           <div className="card-body">
-            <div className="preview-content">
-              {getReportContent().split('\n').map((line, idx) => (
-                <div key={idx}>{line}</div>
-              ))}
-            </div>
-          </div>
-        </div>
-      </div>
+            <ul style={{ lineHeight: '1.8', listStylePosition: 'inside' }}>
+              <li>
+                <strong>📄 PDF Report:</strong> Comprehensive report with all fee collection data, metrics, monthly trends, and transaction details
+              </li>
+              <li>
+                <strong>💳 Transactions CSV:</strong> Recent transactions list with student names, amounts, payment methods, and dates
+              </li>
+              <li>
+                <strong>⏳ Pending Payments CSV:</strong> List of students with pending or overdue fee payments
+              </li>
+              <li>
+                <strong>💰 Refund Requests CSV:</strong> List of all refund requests with status and amounts
+              </li>
+            </ul>
 
-      <div className="card">
-        <div className="card-header">
-          <h2 className="card-title">📋 Available Reports</h2>
-        </div>
-        <div className="card-body">
-          <ul>
-            <li><strong>Fee Collection Summary:</strong> Overview of collected, pending, overdue, and refunded fees</li>
-            <li><strong>Monthly Fee Report:</strong> Monthly breakdown of collected vs pending fees</li>
-            <li><strong>Pending Fees Report:</strong> List of all students with pending fee payments</li>
-            <li><strong>All Invoices Report:</strong> Complete list of all invoices and their payment status</li>
-            <li><strong>Transactions Report:</strong> Recent transaction history with status</li>
-          </ul>
+            <hr style={{ margin: '15px 0', borderColor: '#ddd' }} />
+
+            <h3 style={{ marginTop: '15px', marginBottom: '10px' }}>Troubleshooting</h3>
+            <ul style={{ lineHeight: '1.8', listStylePosition: 'inside', fontSize: '0.9em' }}>
+              <li><strong>401 Error:</strong> Please login first before exporting reports</li>
+              <li><strong>403 Error:</strong> You don't have permission to export reports (admin role required)</li>
+              <li><strong>Network Error:</strong> Make sure the backend server is running</li>
+              <li><strong>Check Console:</strong> Open browser dev tools (F12) and check the Console tab for detailed error logs</li>
+            </ul>
+          </div>
         </div>
       </div>
     </div>
