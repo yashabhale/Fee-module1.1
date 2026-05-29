@@ -66,10 +66,10 @@ export const getDashboardStats = async () => {
     });
 
     return {
-      totalFeesCollected: parseFloat(totalFeesCollected._sum.amount || 0),
-      pendingPayments: parseFloat(pendingPayments._sum.amountPending || 0),
-      overduePayments: parseFloat(overduePayments._sum.amountPending || 0),
-      refundRequests: parseFloat(refundRequests._sum.amount || 0),
+      totalFeesCollected: Number(totalFeesCollected._sum.amount || 0),
+      pendingPayments: Number(pendingPayments._sum.amountPending || 0),
+      overduePayments: Number(overduePayments._sum.amountPending || 0),
+      refundRequests: Number(refundRequests._sum.amount || 0),
       refundCount: refundRequests._count,
     };
   } catch (error: any) {
@@ -147,15 +147,20 @@ export const getRecentTransactions = async (limit: number = 15) => {
         createdAt: 'desc',
       },
       include: {
-        student: true,
+        feePayment: {
+          include: {
+            student: true
+          }
+        }
       },
     });
 
     return transactions.map((t: any) => ({
       id: t.id,
-      studentId: t.studentId,
-      studentName: t.student?.name || 'Unknown',
-      amount: t.amount,
+      studentId: t.feePayment?.student?.studentId,
+      studentName: t.feePayment?.student?.firstName ? 
+        `${t.feePayment.student.firstName} ${t.feePayment.student.lastName}` : 'Unknown',
+      amount: Number(t.amount),
       paymentMethod: t.paymentMethod,
       transactionId: t.transactionId,
       totalAmount: t.amount,

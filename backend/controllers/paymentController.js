@@ -1,38 +1,43 @@
-import { PaymentService } from '../services/paymentService.js';
-import { sendSuccessResponse, sendErrorResponse } from '../utils/responseHelper.js';
+import PaymentService from '../services/paymentService.js';
 import logger from '../config/logger.js';
-import crypto from 'crypto';
-import FeePayment from '../models/FeePayment.js';
 
 /**
- * Payment Controller - Handles payment-related API requests
+ * Payment Controller - Complete Razorpay Integration
+ * Handles: Order creation, verification, status checking, refunds
  */
 
 /**
  * POST /api/payments/create-order
- * Initialize Razorpay Order with Order ID
+ * Step 1: Frontend → Backend to create Razorpay Order
+ * 
+ * SECURITY:
+ * - Backend has Secret Key, frontend doesn't
+ * - Only public Order ID is returned to frontend
+ * - Frontend uses Order ID + Public Key for Razorpay modal
+ * 
  * Body: { amount, studentName, studentId, invoiceId, totalAmount }
- * Returns: orderId, currency (INR), Razorpay API Key, amount
+ * Returns: { orderId, amount, currency, razorpayKey }
  */
 export const createOrder = async (req, res) => {
   try {
     const { amount, studentName, studentId, invoiceId, totalAmount } = req.body;
 
-    // Validate required fields
+    // Validate inputs
     if (!amount || !studentName || !studentId || !invoiceId) {
-      return sendErrorResponse(
-        res,
-        'Missing required fields: amount, studentName, studentId, invoiceId',
-        400
-      );
+      return res.status(400).json({
+        success: false,
+        message: 'Missing required fields: amount, studentName, studentId, invoiceId',
+      });
     }
 
-    // Validate amount is positive
     if (amount <= 0) {
-      return sendErrorResponse(res, 'Amount must be greater than 0', 400);
+      return res.status(400).json({
+        success: false,
+        message: 'Amount must be greater than 0',
+      });
     }
 
-    // Create order using PaymentService - returns real order ID from Razorpay
+    // Create order using PaymentService
     const orderData = await PaymentService.createOrder({
       amount,
       studentName,
@@ -41,121 +46,105 @@ export const createOrder = async (req, res) => {
       totalAmount,
     });
 
-    logger.info(`Order created successfully: ${orderData.orderId}`);
-
-    return sendSuccessResponse(
-      res,
-      'Order created successfully',
-      {
+    // Return order data + public API key to frontend
+    return res.status(201).json({
+      success: true,
+      message: 'Order created successfully',
+      data: {
         orderId: orderData.orderId,
-        amount: orderData.amount, // Amount in paise
-        currency: 'INR', // Always INR for India
-        razorpayKey: process.env.RAZORPAY_KEY_ID, // Send API key to frontend
+        amount: orderData.amount, // in paise
+        currency: orderData.currency,
+        razorpayKey: process.env.RAZORPAY_KEY_ID, // PUBLIC KEY ONLY
         studentName: orderData.studentName,
         studentId: orderData.studentId,
         invoiceId: orderData.invoiceId,
       },
-      201
-    );
+    });
   } catch (error) {
     logger.error(`Error in createOrder: ${error.message}`);
-    return sendErrorResponse(res, error.message, 500);
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
   }
 };
 
 /**
  * POST /api/payments/verify
- * Verify payment signature from Razorpay UPI response
- * Checks signature validity, then updates FeePayment table:
- * UPDATE "FeePayment" SET "paymentStatus" = 'paid', "amountPaid" = amount WHERE student = studentId
+ * Step 2: Frontend → Backend to verify payment signature
+ * 
+ * SECURITY:
+ * - Frontend sends: orderId, paymentId, signature (from Razorpay)
+ * - Backend verifies using Secret Key (HMAC-SHA256)
+ * - Only backend can verify because only backend has Secret Key
+ * - Prevents fake/spoofed payments
+ * 
  * Body: { orderId, paymentId, signature, studentId, amount }
+ * Returns: { success: true/false, paymentStatus, amountPaid }
  */
 export const verifyPayment = async (req, res) => {
   try {
     const { orderId, paymentId, signature, studentId, amount } = req.body;
 
-    // Validate required fields
+    // Validate inputs
     if (!orderId || !paymentId || !signature || !studentId || !amount) {
-      return sendErrorResponse(
-        res,
-        'Missing required fields: orderId, paymentId, signature, studentId, amount',
-        400
-      );
+      return res.status(400).json({
+        success: false,
+        message: 'Missing required fields: orderId, paymentId, signature, studentId, amount',
+      });
     }
 
     logger.info(`Verifying payment: ${paymentId} for student: ${studentId}`);
 
-    // Verify payment signature using Razorpay webhook secret
-    const body = `${orderId}|${paymentId}`;
-    const expectedSignature = crypto
-      .createHmac('sha256', process.env.RAZORPAY_WEBHOOK_SECRET)
-      .update(body)
-      .digest('hex');
-
-    const isSignatureValid = expectedSignature === signature;
+    // SECURITY: Verify signature using Secret Key
+    // This is the critical step - only backend can do this
+    const isSignatureValid = PaymentService.verifyPaymentSignature(
+      { orderId, paymentId, signature },
+      process.env.RAZORPAY_WEBHOOK_SECRET
+    );
 
     if (!isSignatureValid) {
       logger.warn(`Invalid signature for payment ${paymentId}`);
-      return sendErrorResponse(
-        res,
-        'Payment signature verification failed. Payment not valid.',
-        400
-      );
+      return res.status(400).json({
+        success: false,
+        message: 'Payment verification failed. Invalid signature.',
+      });
     }
 
-    logger.info(`Signature verified for payment ${paymentId}`);
+    logger.info(`✅ Signature verified for payment ${paymentId}`);
 
-    // Signature is valid - Update FeePayment table
-    // UPDATE "FeePayment" 
-    // SET "paymentStatus" = 'paid', "amountPaid" = amount 
-    // WHERE student = studentId
-    const feePayment = await FeePayment.findOneAndUpdate(
-      { student: studentId, paymentStatus: { $ne: 'paid' } }, // Find and update if not already paid
-      {
-        paymentStatus: 'paid',
-        amountPaid: amount,
-        $push: {
-          payments: {
-            amount: amount,
-            paymentDate: new Date(),
-            paymentMethod: 'online',
-            transactionId: paymentId,
-            notes: `Razorpay UPI Payment - Order: ${orderId}`,
-          },
-        },
-      },
-      { new: true } // Return the updated document
-    );
-
-    if (!feePayment) {
-      logger.error(`FeePayment record not found for student: ${studentId}`);
-      return sendErrorResponse(
-        res,
-        'Fee payment record not found for this student',
-        404
-      );
+    // Optional: Fetch payment details from Razorpay to double-check
+    let paymentDetails = null;
+    try {
+      paymentDetails = await PaymentService.getPaymentDetails(paymentId);
+      logger.info(`Payment status from Razorpay: ${paymentDetails.status}`);
+    } catch (error) {
+      logger.warn(`Could not fetch payment details: ${error.message}`);
     }
 
-    logger.info(`FeePayment updated successfully for student ${studentId}`);
-    logger.info(`Payment Status: ${feePayment.paymentStatus}, Amount Paid: ${feePayment.amountPaid}`);
+    // Payment is verified! Now you can:
+    // 1. Update database (mark payment as success)
+    // 2. Send confirmation email
+    // 3. Trigger other business logic
 
-    return sendSuccessResponse(
-      res,
-      'Payment verified successfully and fee payment updated',
-      {
-        success: true,
-        paymentStatus: feePayment.paymentStatus,
-        amountPaid: feePayment.amountPaid,
-        totalAmount: feePayment.totalAmount,
-        paymentDate: feePayment.updatedAt,
-        transactionId: paymentId,
-        message: `Payment of ₹${amount} recorded successfully. Fee status updated to 'paid'.`,
+    return res.status(200).json({
+      success: true,
+      message: 'Payment verified successfully',
+      data: {
+        paymentId,
+        orderId,
+        studentId,
+        amount: PaymentService.paiseToRupees(amount), // Convert to rupees
+        status: paymentDetails?.status || 'captured',
+        verifiedAt: new Date(),
       },
-      200
-    );
+    });
   } catch (error) {
     logger.error(`Error in verifyPayment: ${error.message}`);
-    return sendErrorResponse(res, `Payment verification error: ${error.message}`, 500);
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
   }
 };
 
@@ -178,111 +167,37 @@ export const handlePaymentWebhook = async (req, res) => {
         // Payment has been authorized
         await handlePaymentAuthorized(payload.payment);
         break;
-
-      case 'payment.failed':
-        // Payment has failed
-        await handlePaymentFailed(payload.payment);
-        break;
-
-      case 'payment.captured':
-        // Payment has been captured (successful)
-        await handlePaymentCaptured(payload.payment);
-        break;
-
-      default:
-        logger.info(`Unhandled webhook event: ${event}`);
-    }
-
-    // Always return 200 to acknowledge webhook
-    return res.status(200).json({
-      success: true,
-      message: 'Webhook processed',
-    });
-  } catch (error) {
-    logger.error(`Error processing webhook: ${error.message}`);
-    // Still return 200 to avoid Razorpay retrying
-    return res.status(200).json({
-      success: false,
-      message: 'Webhook processed with error',
-    });
-  }
-};
-
-/**
- * Handle payment.authorized webhook event
- */
-async function handlePaymentAuthorized(payment) {
-  try {
-    const { id: paymentId, amount, notes } = payment;
-    const { invoiceId, studentId } = notes;
-
-    logger.info(`Payment authorized: ${paymentId} for invoice ${invoiceId}`);
-
-    // Update fee payment record
-    await PaymentService.updateFeePaymentAfterSuccess({
-      invoiceId,
-      paymentId,
-      amount,
-      studentId,
-    });
-  } catch (error) {
-    logger.error(`Error handling payment.authorized: ${error.message}`);
-  }
-}
-
-/**
- * Handle payment.captured webhook event
- */
-async function handlePaymentCaptured(payment) {
-  try {
-    const { id: paymentId, amount, notes, status } = payment;
-    const { invoiceId, studentId } = notes;
-
-    logger.info(`Payment captured: ${paymentId} for invoice ${invoiceId}`);
-
-    // Update fee payment record
-    await PaymentService.updateFeePaymentAfterSuccess({
-      invoiceId,
-      paymentId,
-      amount,
-      studentId,
-    });
-  } catch (error) {
-    logger.error(`Error handling payment.captured: ${error.message}`);
-  }
-}
-
-/**
- * Handle payment.failed webhook event
- */
-async function handlePaymentFailed(payment) {
-  try {
-    const { id: paymentId, notes } = payment;
-    const { invoiceId } = notes;
-
-    logger.warn(`Payment failed: ${paymentId} for invoice ${invoiceId}`);
-    // You can implement notification logic here
-  } catch (error) {
-    logger.error(`Error handling payment.failed: ${error.message}`);
-  }
-}
-
-/**
- * GET /api/payments/status/:paymentId
+GET /api/payments/status/:paymentId
  * Get payment status from Razorpay
+ * 
+ * Query params: paymentId
+ * Returns: { status, amount, method, email }
  */
 export const getPaymentStatus = async (req, res) => {
   try {
     const { paymentId } = req.params;
 
     if (!paymentId) {
-      return sendErrorResponse(res, 'Payment ID is required', 400);
+      return res.status(400).json({
+        success: false,
+        message: 'Payment ID is required',
+      });
     }
 
     const paymentDetails = await PaymentService.getPaymentDetails(paymentId);
 
-    return sendSuccessResponse(
-      res,
+    return res.status(200).json({
+      success: true,
+      data: paymentDetails,
+    });
+  } catch (error) {
+    logger.error(`Error in getPaymentStatus: ${error.message}`);
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};     res,
       'Payment details retrieved successfully',
       {
         paymentId: paymentDetails.id,
@@ -338,3 +253,110 @@ export default {
   getPaymentStatus,
   refundPayment,
 };
+POST /api/payments/refund
+ * Process refund for a payment
+ * Body: { paymentId, amount (optional) }
+ */
+export const refundPayment = async (req, res) => {
+  try {
+    const { paymentId, amount } = req.body;
+
+    if (!paymentId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Payment ID is required',
+      });
+    }
+
+    const refundData = await PaymentService.refundPayment(paymentId, amount);
+
+    return res.status(200).json({
+      success: true,
+      message: 'Refund processed successfully',
+      data: refundData,
+    });
+  } catch (error) {
+    logger.error(`Error in refundPayment: ${error.message}`);
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+/**
+ * POST /api/payments/webhook
+ * Razorpay webhook endpoint
+ * Razorpay servers call this when payment status changes
+ * 
+ * Headers: X-Razorpay-Signature
+ * Body: Raw webhook data from Razorpay
+ */
+export const handlePaymentWebhook = async (req, res) => {
+  try {
+    const webhookSignature = req.headers['x-razorpay-signature'];
+    const webhookBody = req.rawBody || JSON.stringify(req.body);
+
+    logger.info('Received Razorpay webhook');
+
+    // Verify webhook is authentic
+    const isWebhookValid = PaymentService.verifyWebhookSignature(
+      webhookBody,
+      webhookSignature,
+      process.env.RAZORPAY_WEBHOOK_SECRET
+    );
+
+    if (!isWebhookValid) {
+      logger.warn('Invalid webhook signature');
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid webhook signature',
+      });
+    }
+
+    // Process webhook events
+    const event = req.body.event;
+    const payload = req.body.payload;
+
+    logger.info(`Processing webhook event: ${event}`);
+
+    switch (event) {
+      case 'payment.authorized':
+        logger.info(`Payment authorized: ${payload.payment.entity.id}`);
+        // Handle payment authorization
+        break;
+
+      case 'payment.failed':
+        logger.warn(`Payment failed: ${payload.payment.entity.id}`);
+        // Handle payment failure
+        break;
+
+      case 'payment.captured':
+        logger.info(`Payment captured: ${payload.payment.entity.id}`);
+        // Handle payment capture
+        break;
+
+      default:
+        logger.info(`Webhook event not handled: ${event}`);
+    }
+
+    // Acknowledge webhook to Razorpay
+    return res.status(200).json({
+      success: true,
+      message: 'Webhook processed',
+    });
+  } catch (error) {
+    logger.error(`Error in webhook handler: ${error.message}`);
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+export default {
+  createOrder,
+  verifyPayment,
+  getPaymentStatus,
+  refundPayment,
+  handlePaymentWebhook

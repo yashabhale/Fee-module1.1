@@ -5,21 +5,24 @@
 // to power the Fees & Payments Dashboard
 // ================================================================
 
+import { Request, Response } from 'express';
 import DashboardService from '../services/dashboardService';
-import { sendSuccessResponse, sendErrorResponse } from '../middleware/errorHandler';
+// @ts-ignore - responseHelper is a TS file compiled to JS
+import { sendSuccessResponse, sendErrorResponse } from '../utils/responseHelper';
 import logger from '../config/logger';
 
 /**
  * GET /api/fee-payments/dashboard/stats
  * Returns: Dashboard metric cards (Total Collected, Pending, Overdue, Refunds)
  */
-export const getDashboardStats = async (req, res) => {
+export const getDashboardStats = async (req: Request, res: Response) => {
   try {
     const metrics = await DashboardService.getDashboardMetrics();
     return sendSuccessResponse(res, 'Dashboard metrics retrieved successfully', metrics);
   } catch (error) {
-    logger.error(`Dashboard stats error: ${error.message}`);
-    return sendErrorResponse(res, error.message, 500);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    logger.error(`Dashboard stats error: ${errorMessage}`);
+    return sendErrorResponse(res, errorMessage, 500);
   }
 };
 
@@ -28,10 +31,10 @@ export const getDashboardStats = async (req, res) => {
  * Query Params: year (optional, default: current year)
  * Returns: Monthly collection trend data for bar chart
  */
-export const getMonthlyTrend = async (req, res) => {
+export const getMonthlyTrend = async (req: Request, res: Response) => {
   try {
     const { year } = req.query;
-    const yearValue = year ? parseInt(year) : new Date().getFullYear();
+    const yearValue = year ? parseInt(year as string) : new Date().getFullYear();
     
     const monthlyData = await DashboardService.getMonthlyCollectionTrend(yearValue);
     
@@ -41,8 +44,9 @@ export const getMonthlyTrend = async (req, res) => {
       monthlyData
     );
   } catch (error) {
-    logger.error(`Monthly trend error: ${error.message}`);
-    return sendErrorResponse(res, error.message, 500);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    logger.error(`Monthly trend error: ${errorMessage}`);
+    return sendErrorResponse(res, errorMessage, 500);
   }
 };
 
@@ -50,7 +54,7 @@ export const getMonthlyTrend = async (req, res) => {
  * GET /api/fee-payments/dashboard/payment-methods
  * Returns: Payment method distribution for donut/pie chart
  */
-export const getPaymentMethodStats = async (req, res) => {
+export const getPaymentMethodStats = async (req: Request, res: Response) => {
   try {
     const distribution = await DashboardService.getPaymentMethodDistribution();
     
@@ -60,8 +64,9 @@ export const getPaymentMethodStats = async (req, res) => {
       distribution
     );
   } catch (error) {
-    logger.error(`Payment method stats error: ${error.message}`);
-    return sendErrorResponse(res, error.message, 500);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    logger.error(`Payment method stats error: ${errorMessage}`);
+    return sendErrorResponse(res, errorMessage, 500);
   }
 };
 
@@ -70,10 +75,10 @@ export const getPaymentMethodStats = async (req, res) => {
  * Query Params: limit (optional, default: 10)
  * Returns: Recent transaction records for dashboard table
  */
-export const getRecentTransactions = async (req, res) => {
+export const getRecentTransactions = async (req: Request, res: Response) => {
   try {
     const { limit = 10 } = req.query;
-    const limitValue = Math.min(parseInt(limit) || 10, 50); // Max 50
+    const limitValue = Math.min(parseInt(limit as string) || 10, 50); // Max 50
     
     const transactions = await DashboardService.getRecentTransactions(limitValue);
     
@@ -83,8 +88,9 @@ export const getRecentTransactions = async (req, res) => {
       transactions
     );
   } catch (error) {
-    logger.error(`Recent transactions error: ${error.message}`);
-    return sendErrorResponse(res, error.message, 500);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    logger.error(`Recent transactions error: ${errorMessage}`);
+    return sendErrorResponse(res, errorMessage, 500);
   }
 };
 
@@ -92,7 +98,7 @@ export const getRecentTransactions = async (req, res) => {
  * GET /api/fee-payments/dashboard/status-distribution
  * Returns: Payment status breakdown (Paid, Pending, Partial, Overdue)
  */
-export const getStatusDistribution = async (req, res) => {
+export const getStatusDistribution = async (req: Request, res: Response) => {
   try {
     const distribution = await DashboardService.getPaymentStatusDistribution();
     
@@ -102,8 +108,9 @@ export const getStatusDistribution = async (req, res) => {
       distribution
     );
   } catch (error) {
-    logger.error(`Status distribution error: ${error.message}`);
-    return sendErrorResponse(res, error.message, 500);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    logger.error(`Status distribution error: ${errorMessage}`);
+    return sendErrorResponse(res, errorMessage, 500);
   }
 };
 
@@ -111,7 +118,7 @@ export const getStatusDistribution = async (req, res) => {
  * GET /api/fee-payments/dashboard/by-class
  * Returns: Collection metrics grouped by class
  */
-export const getCollectionByClass = async (req, res) => {
+export const getCollectionByClass = async (req: Request, res: Response) => {
   try {
     const classMetrics = await DashboardService.getCollectionByClass();
     
@@ -121,8 +128,9 @@ export const getCollectionByClass = async (req, res) => {
       classMetrics
     );
   } catch (error) {
-    logger.error(`Collection by class error: ${error.message}`);
-    return sendErrorResponse(res, error.message, 500);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    logger.error(`Collection by class error: ${errorMessage}`);
+    return sendErrorResponse(res, errorMessage, 500);
   }
 };
 
@@ -131,10 +139,10 @@ export const getCollectionByClass = async (req, res) => {
  * Query Params: limit (optional, default: 20)
  * Returns: Students with outstanding balances
  */
-export const getOutstandingBalances = async (req, res) => {
+export const getOutstandingBalances = async (req: Request, res: Response) => {
   try {
     const { limit = 20 } = req.query;
-    const limitValue = Math.min(parseInt(limit) || 20, 100); // Max 100
+    const limitValue = Math.min(parseInt(limit as string) || 20, 100); // Max 100
     
     const outstanding = await DashboardService.getOutstandingBalances(limitValue);
     
@@ -144,8 +152,9 @@ export const getOutstandingBalances = async (req, res) => {
       outstanding
     );
   } catch (error) {
-    logger.error(`Outstanding balances error: ${error.message}`);
-    return sendErrorResponse(res, error.message, 500);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    logger.error(`Outstanding balances error: ${errorMessage}`);
+    return sendErrorResponse(res, errorMessage, 500);
   }
 };
 
@@ -153,7 +162,7 @@ export const getOutstandingBalances = async (req, res) => {
  * GET /api/fee-payments/dashboard/refund-stats
  * Returns: Refund statistics by status
  */
-export const getRefundStats = async (req, res) => {
+export const getRefundStats = async (req: Request, res: Response) => {
   try {
     const stats = await DashboardService.getRefundStats();
     
@@ -163,8 +172,9 @@ export const getRefundStats = async (req, res) => {
       stats
     );
   } catch (error) {
-    logger.error(`Refund stats error: ${error.message}`);
-    return sendErrorResponse(res, error.message, 500);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    logger.error(`Refund stats error: ${errorMessage}`);
+    return sendErrorResponse(res, errorMessage, 500);
   }
 };
 
@@ -173,10 +183,10 @@ export const getRefundStats = async (req, res) => {
  * Query Params: days (optional, default: 30)
  * Returns: Daily collection trend
  */
-export const getDailyTrend = async (req, res) => {
+export const getDailyTrend = async (req: Request, res: Response) => {
   try {
     const { days = 30 } = req.query;
-    const daysValue = Math.min(parseInt(days) || 30, 365); // Max 1 year
+    const daysValue = Math.min(parseInt(days as string) || 30, 365); // Max 1 year
     
     const dailyData = await DashboardService.getDailyCollectionTrend(daysValue);
     
@@ -186,8 +196,9 @@ export const getDailyTrend = async (req, res) => {
       dailyData
     );
   } catch (error) {
-    logger.error(`Daily trend error: ${error.message}`);
-    return sendErrorResponse(res, error.message, 500);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    logger.error(`Daily trend error: ${errorMessage}`);
+    return sendErrorResponse(res, errorMessage, 500);
   }
 };
 
@@ -195,7 +206,7 @@ export const getDailyTrend = async (req, res) => {
  * GET /api/fee-payments/dashboard/overdue
  * Returns: List of overdue invoices
  */
-export const getOverdueInvoices = async (req, res) => {
+export const getOverdueInvoices = async (req: Request, res: Response) => {
   try {
     const overdueInvoices = await DashboardService.getOverdueInvoices();
     
@@ -205,8 +216,9 @@ export const getOverdueInvoices = async (req, res) => {
       overdueInvoices
     );
   } catch (error) {
-    logger.error(`Overdue invoices error: ${error.message}`);
-    return sendErrorResponse(res, error.message, 500);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    logger.error(`Overdue invoices error: ${errorMessage}`);
+    return sendErrorResponse(res, errorMessage, 500);
   }
 };
 
@@ -215,7 +227,7 @@ export const getOverdueInvoices = async (req, res) => {
  * Returns: Complete dashboard data (all metrics + charts + tables)
  * This is an aggregated endpoint for initial page load
  */
-export const getDashboardSummary = async (req, res) => {
+export const getDashboardSummary = async (req: Request, res: Response) => {
   try {
     // Fetch all data in parallel
     const [
@@ -253,8 +265,9 @@ export const getDashboardSummary = async (req, res) => {
       summary
     );
   } catch (error) {
-    logger.error(`Dashboard summary error: ${error.message}`);
-    return sendErrorResponse(res, error.message, 500);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    logger.error(`Dashboard summary error: ${errorMessage}`);
+    return sendErrorResponse(res, errorMessage, 500);
   }
 };
 

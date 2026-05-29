@@ -403,4 +403,69 @@ export class FeePaymentService {
       throw error;
     }
   }
+
+  /**
+   * Get recent transactions with customizable limit
+   * @param {number} limit - Number of recent transactions to fetch (default: 5)
+   * @returns {Promise<Array>} - Array of formatted recent transactions
+   */
+  static async getRecentTransactions(limit = 5) {
+    try {
+      // Query recent payments with related data
+      const recentTransactions = await prisma.payment.findMany({
+        take: parseInt(limit) || 5,
+        orderBy: {
+          createdAt: 'desc'
+        },
+        include: {
+          feePayment: {
+            include: {
+              student: {
+                select: {
+                  firstName: true,
+                  lastName: true,
+                  studentId: true
+                }
+              },
+              feeStructure: {
+                include: {
+                  class: {
+                    select: {
+                      name: true
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      });
+
+      // Format recent transactions with required fields
+      const formattedTransactions = recentTransactions.map(transaction => {
+        const student = transaction.feePayment?.student;
+        const classInfo = transaction.feePayment?.feeStructure?.class;
+        const feePaymentStatus = transaction.feePayment?.paymentStatus;
+
+        return {
+          id: transaction.id,
+          studentName: student ? `${student.firstName} ${student.lastName}` : 'N/A',
+          studentId: student?.studentId || 'N/A',
+          invoiceNo: transaction.id,
+          class: classInfo?.name || 'N/A',
+          amount: Number(transaction.amount),
+          method: transaction.paymentMethod,
+          status: feePaymentStatus || 'UNKNOWN',
+          transactionDate: transaction.createdAt,
+          transactionId: transaction.transactionId
+        };
+      });
+
+      logger.info(`Retrieved ${formattedTransactions.length} recent transactions`);
+      return formattedTransactions;
+    } catch (error) {
+      logger.error(`Get recent transactions error: ${error.message}`);
+      throw error;
+    }
+  }
 }

@@ -146,9 +146,9 @@ export const fetchMonthlyCollectionData = async (year = new Date().getFullYear()
 export const fetchPaymentMethodData = async () => {
   try {
     console.log('💳 Fetching payment method distribution from database...')
-    const response = await api.get('/transactions')
+    const response = await api.get('/fee-payments/dashboard/stats')
     console.log('✅ Payment method data loaded successfully')
-    return { success: true, data: response.data.data }
+    return { success: true, data: response.data.data?.paymentMethods || [] }
   } catch (error) {
     const errorMessage = formatErrorMessage(error, 'payment method data')
     console.error('💳 Payment Method Error:', errorMessage)
@@ -195,7 +195,7 @@ export const fetchRecentTransactions = async (limit = 5) => {
 export const fetchTransactions = async () => {
   try {
     console.log('💳 Fetching transactions...')
-    const response = await api.get('/transactions')
+    const response = await api.get('/fee-payments')
     console.log('✅ Transactions loaded successfully')
     return { success: true, data: response.data }
   } catch (error) {

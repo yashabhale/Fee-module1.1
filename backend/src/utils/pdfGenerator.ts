@@ -1,3 +1,4 @@
+// @ts-ignore - pdfkit doesn't have type definitions
 import PDFDocument from 'pdfkit';
 import logger from '../config/logger';
 

@@ -1,8 +1,7 @@
 // ================================================================
-// FEE PAYMENT SERVICE - Dashboard Queries Implementation
+// DASHBOARD SERVICE - Analytics & Metrics Queries
 // ================================================================
-// This file demonstrates how to use the SQL queries in your 
-// backend services using Prisma ORM
+// Implements dashboard analytics using Prisma ORM
 // ================================================================
 
 import prisma from '../config/database';
@@ -10,7 +9,7 @@ import logger from '../config/logger';
 
 export class DashboardService {
   /**
-   * Get all dashboard metrics in one optimized query
+   * Get all dashboard metrics
    * Returns: Total collected, pending, overdue, refund requests
    */
   static async getDashboardMetrics() {
@@ -59,16 +58,17 @@ export class DashboardService {
         ]);
 
       const metrics = {
-        totalFeesCollected: totalCollected._sum.amount || 0,
-        pendingPayments: pendingPayments._sum.amountPending || 0,
-        overduePayments: overduePayments._sum.amountPending || 0,
-        refundRequests: refundRequests._sum.amount || 0
+        totalFeesCollected: Number(totalCollected._sum.amount) || 0,
+        pendingPayments: Number(pendingPayments._sum.amountPending) || 0,
+        overduePayments: Number(overduePayments._sum.amountPending) || 0,
+        refundRequests: Number(refundRequests._sum.amount) || 0
       };
 
       logger.info('✅ Dashboard metrics fetched successfully', metrics);
       return metrics;
     } catch (error) {
-      logger.error(`Error fetching dashboard metrics: ${error.message}`);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      logger.error(`Error fetching dashboard metrics: ${errorMessage}`);
       throw error;
     }
   }
@@ -77,11 +77,11 @@ export class DashboardService {
    * Get monthly collection trend for bar chart
    * Returns: Array of monthly collections with month names
    */
-  static async getMonthlyCollectionTrend(year = new Date().getFullYear()) {
+  static async getMonthlyCollectionTrend(year: number = new Date().getFullYear()) {
     try {
       logger.info(`📈 Fetching monthly collection trend for year ${year}...`);
 
-      const payments = await prisma.$queryRaw`
+      const payments = await prisma.$queryRaw<Array<any>>`
         SELECT 
           DATE_TRUNC('month', "Payment"."createdAt")::DATE as collection_month,
           TO_CHAR(DATE_TRUNC('month', "Payment"."createdAt"), 'Mon') as month_name,
@@ -94,10 +94,11 @@ export class DashboardService {
         ORDER BY DATE_TRUNC('month', "Payment"."createdAt") ASC
       `;
 
-      logger.info(`✅ Monthly collection trend fetched: ${payments.length} months`);
+      logger.info(`✅ Monthly collection trend fetched: ${(payments as any[]).length} months`);
       return payments;
     } catch (error) {
-      logger.error(`Error fetching monthly trend: ${error.message}`);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      logger.error(`Error fetching monthly trend: ${errorMessage}`);
       throw error;
     }
   }
@@ -122,19 +123,21 @@ export class DashboardService {
       });
 
       // Calculate total for percentage
-      const total = distribution.reduce((sum, item) => sum + (item._sum.amount || 0), 0);
+      const total = distribution.reduce((sum: number, item: any) => 
+        sum + Number(item._sum.amount || 0), 0);
 
-      const formattedDistribution = distribution.map(item => ({
+      const formattedDistribution = distribution.map((item: any) => ({
         paymentMethod: item.paymentMethod,
-        totalAmount: item._sum.amount || 0,
+        totalAmount: Number(item._sum.amount) || 0,
         transactionCount: item._count.id,
-        percentage: total > 0 ? ((item._sum.amount || 0) / total * 100).toFixed(2) : 0
+        percentage: total > 0 ? ((Number(item._sum.amount || 0) / total * 100).toFixed(2)) : '0'
       }));
 
       logger.info('✅ Payment method distribution fetched', formattedDistribution);
-      return formattedDistribution.sort((a, b) => b.totalAmount - a.totalAmount);
+      return formattedDistribution.sort((a: any, b: any) => b.totalAmount - a.totalAmount);
     } catch (error) {
-      logger.error(`Error fetching payment method distribution: ${error.message}`);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      logger.error(`Error fetching payment method distribution: ${errorMessage}`);
       throw error;
     }
   }
@@ -143,7 +146,7 @@ export class DashboardService {
    * Get recent transactions
    * Returns: Array of last N transactions with student and fee details
    */
-  static async getRecentTransactions(limit = 10) {
+  static async getRecentTransactions(limit: number = 10) {
     try {
       logger.info(`📋 Fetching recent ${limit} transactions...`);
 
@@ -159,12 +162,7 @@ export class DashboardService {
                   firstName: true,
                   lastName: true,
                   studentId: true,
-                  class: {
-                    select: {
-                      id: true,
-                      name: true
-                    }
-                  }
+                  classId: true
                 }
               }
             }
@@ -172,12 +170,12 @@ export class DashboardService {
         }
       });
 
-      const formattedTransactions = transactions.map(trans => ({
+      const formattedTransactions = transactions.map((trans: any) => ({
         studentName: `${trans.feePayment.student.firstName} ${trans.feePayment.student.lastName}`,
         studentId: trans.feePayment.student.studentId,
         invoiceId: trans.feePaymentId,
-        className: trans.feePayment.student.class?.name || 'N/A',
-        amount: parseFloat(trans.amount.toString()),
+        className: trans.feePayment.student.classId || 'N/A',
+        amount: Number(trans.amount),
         paymentMethod: trans.paymentMethod,
         status: trans.feePayment.paymentStatus,
         transactionDate: trans.createdAt,
@@ -187,7 +185,8 @@ export class DashboardService {
       logger.info(`✅ Recent transactions fetched: ${formattedTransactions.length}`);
       return formattedTransactions;
     } catch (error) {
-      logger.error(`Error fetching recent transactions: ${error.message}`);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      logger.error(`Error fetching recent transactions: ${errorMessage}`);
       throw error;
     }
   }
@@ -207,16 +206,17 @@ export class DashboardService {
         where: { isActive: true }
       });
 
-      const formattedDistribution = distribution.map(item => ({
+      const formattedDistribution = distribution.map((item: any) => ({
         status: item.paymentStatus,
         count: item._count.id,
-        totalAmount: parseFloat((item._sum.totalAmount || 0).toString())
+        totalAmount: Number(item._sum.totalAmount || 0)
       }));
 
       logger.info('✅ Payment status distribution fetched', formattedDistribution);
       return formattedDistribution;
     } catch (error) {
-      logger.error(`Error fetching payment status distribution: ${error.message}`);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      logger.error(`Error fetching payment status distribution: ${errorMessage}`);
       throw error;
     }
   }
@@ -242,19 +242,19 @@ export class DashboardService {
         }
       });
 
-      const classMetrics = classeData.map(cls => {
+      const classMetrics = classeData.map((cls: any) => {
         const totalStudents = cls.students.length;
-        const totalFeeDue = cls.students.reduce((sum, student) => {
-          const studentTotal = student.feePayments.reduce(
-            (s, fee) => s + parseFloat(fee.totalAmount.toString()),
+        const totalFeeDue = cls.students.reduce((sum: number, student: any) => {
+          const studentTotal = (student.feePayments || []).reduce(
+            (s: number, fee: any) => s + Number(fee.totalAmount),
             0
           );
           return sum + studentTotal;
         }, 0);
 
-        const totalCollected = cls.students.reduce((sum, student) => {
-          const studentTotal = student.feePayments.reduce(
-            (s, fee) => s + parseFloat(fee.amountPaid.toString()),
+        const totalCollected = cls.students.reduce((sum: number, student: any) => {
+          const studentTotal = (student.feePayments || []).reduce(
+            (s: number, fee: any) => s + Number(fee.amountPaid),
             0
           );
           return sum + studentTotal;
@@ -274,9 +274,11 @@ export class DashboardService {
       });
 
       logger.info(`✅ Collection by class fetched for ${classMetrics.length} classes`);
-      return classMetrics.sort((a, b) => parseFloat(b.collectionPercentage) - parseFloat(a.collectionPercentage));
+      return classMetrics.sort((a: any, b: any) => 
+        parseFloat(b.collectionPercentage) - parseFloat(a.collectionPercentage));
     } catch (error) {
-      logger.error(`Error fetching collection by class: ${error.message}`);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      logger.error(`Error fetching collection by class: ${errorMessage}`);
       throw error;
     }
   }
@@ -285,7 +287,7 @@ export class DashboardService {
    * Get outstanding student balances
    * Returns: Students with pending payments
    */
-  static async getOutstandingBalances(limit = 20) {
+  static async getOutstandingBalances(limit: number = 20) {
     try {
       logger.info(`📌 Fetching outstanding balances (top ${limit})...`);
 
@@ -293,24 +295,16 @@ export class DashboardService {
         where: { status: 'ACTIVE' },
         include: {
           feePayments: {
-            where: { isActive: true },
-            include: {
-              feeStructure: {
-                select: { name: true }
-              }
-            }
-          },
-          class: {
-            select: { name: true }
+            where: { isActive: true }
           }
         }
       });
 
       const outstanding = students
-        .map(student => {
-          const pendingAmount = student.feePayments.reduce((sum, fp) => {
+        .map((student: any) => {
+          const pendingAmount = (student.feePayments || []).reduce((sum: number, fp: any) => {
             if (fp.paymentStatus !== 'PAID') {
-              return sum + parseFloat(fp.amountPending.toString());
+              return sum + Number(fp.amountPending);
             }
             return sum;
           }, 0);
@@ -318,21 +312,22 @@ export class DashboardService {
           return {
             studentName: `${student.firstName} ${student.lastName}`,
             studentId: student.studentId,
-            className: student.class?.name || 'N/A',
+            className: student.classId ? `Class-${student.classId}` : 'N/A',
             pendingAmount: pendingAmount,
-            invoiceCount: student.feePayments.length,
+            invoiceCount: (student.feePayments || []).length,
             studentEmail: student.email,
             studentPhone: student.phone
           };
         })
-        .filter(s => s.pendingAmount > 0)
-        .sort((a, b) => b.pendingAmount - a.pendingAmount)
+        .filter((s: any) => s.pendingAmount > 0)
+        .sort((a: any, b: any) => b.pendingAmount - a.pendingAmount)
         .slice(0, limit);
 
       logger.info(`✅ Outstanding balances fetched: ${outstanding.length} students`);
       return outstanding;
     } catch (error) {
-      logger.error(`Error fetching outstanding balances: ${error.message}`);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      logger.error(`Error fetching outstanding balances: ${errorMessage}`);
       throw error;
     }
   }
@@ -351,16 +346,17 @@ export class DashboardService {
         _sum: { amount: true }
       });
 
-      const formattedStats = stats.map(item => ({
+      const formattedStats = stats.map((item: any) => ({
         status: item.status,
         count: item._count.id,
-        totalAmount: parseFloat((item._sum.amount || 0).toString())
+        totalAmount: Number(item._sum.amount || 0)
       }));
 
       logger.info('✅ Refund statistics fetched', formattedStats);
       return formattedStats;
     } catch (error) {
-      logger.error(`Error fetching refund statistics: ${error.message}`);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      logger.error(`Error fetching refund statistics: ${errorMessage}`);
       throw error;
     }
   }
@@ -369,11 +365,11 @@ export class DashboardService {
    * Get daily collection trend
    * Returns: Collection data grouped by date
    */
-  static async getDailyCollectionTrend(days = 30) {
+  static async getDailyCollectionTrend(days: number = 30) {
     try {
       logger.info(`📅 Fetching daily collection trend for last ${days} days...`);
 
-      const dailyData = await prisma.$queryRaw`
+      const dailyData = await prisma.$queryRaw<Array<any>>`
         SELECT 
           DATE("Payment"."createdAt")::DATE as transaction_date,
           COUNT("Payment"."id")::INT as transaction_count,
@@ -385,10 +381,11 @@ export class DashboardService {
         ORDER BY DATE("Payment"."createdAt") DESC
       `;
 
-      logger.info(`✅ Daily collection trend fetched: ${dailyData.length} days`);
+      logger.info(`✅ Daily collection trend fetched: ${(dailyData as any[]).length} days`);
       return dailyData;
     } catch (error) {
-      logger.error(`Error fetching daily collection trend: ${error.message}`);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      logger.error(`Error fetching daily collection trend: ${errorMessage}`);
       throw error;
     }
   }
@@ -417,23 +414,20 @@ export class DashboardService {
               phone: true,
               email: true
             }
-          },
-          feeStructure: {
-            select: { name: true }
           }
         },
         orderBy: { dueDate: 'asc' }
       });
 
-      const formattedInvoices = overdueInvoices.map(inv => ({
+      const formattedInvoices = overdueInvoices.map((inv: any) => ({
         invoiceId: inv.id,
         studentName: `${inv.student.firstName} ${inv.student.lastName}`,
         studentId: inv.student.studentId,
         studentPhone: inv.student.phone,
-        feeType: inv.feeStructure.name,
-        totalAmount: parseFloat(inv.totalAmount.toString()),
-        amountPaid: parseFloat(inv.amountPaid.toString()),
-        amountPending: parseFloat(inv.amountPending.toString()),
+        feeType: 'Fee Payment',
+        totalAmount: Number(inv.totalAmount),
+        amountPaid: Number(inv.amountPaid),
+        amountPending: Number(inv.amountPending),
         dueDate: inv.dueDate,
         daysOverdue: Math.floor((Date.now() - inv.dueDate.getTime()) / (1000 * 60 * 60 * 24))
       }));
@@ -441,7 +435,8 @@ export class DashboardService {
       logger.info(`✅ Overdue invoices fetched: ${formattedInvoices.length}`);
       return formattedInvoices;
     } catch (error) {
-      logger.error(`Error fetching overdue invoices: ${error.message}`);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      logger.error(`Error fetching overdue invoices: ${errorMessage}`);
       throw error;
     }
   }
