@@ -42,6 +42,11 @@ router.post('/:id/record-payment',
   feePaymentController.recordPayment
 );
 
+// Get a specific fee payment by ID
+router.get('/:id', feePaymentController.getFeePaymentById);
+
+router.get('/pending/list', feePaymentController.getPendingFees);
+
 router.get('/pending', feePaymentController.getPendingPayments);
 
 router.get('/overdue', feePaymentController.getOverduePayments);

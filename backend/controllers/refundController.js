@@ -5,7 +5,20 @@ import logger from '../config/logger.js';
 export const createRefundRequest = async (req, res, next) => {
   try {
     const { userId } = req.user;
-    const refundRequest = await RefundService.createRefundRequest(req.validatedData, userId);
+    
+    // Accept both invoiceId and feePaymentId
+    const { invoiceId, feePaymentId, ...otherData } = req.validatedData;
+    const paymentId = feePaymentId || invoiceId;
+
+    if (!paymentId) {
+      return sendErrorResponse(res, 'invoiceId or feePaymentId is required', 400);
+    }
+
+    const refundRequest = await RefundService.createRefundRequest({
+      ...otherData,
+      feePaymentId: paymentId
+    }, userId);
+    
     return sendSuccessResponse(res, 'Refund request created successfully', refundRequest, 201);
   } catch (error) {
     logger.error(`Create refund request error: ${error.message}`);

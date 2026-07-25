@@ -28,4 +28,14 @@ process.on('SIGINT', async () => {
   process.exit(0);
 });
 
+let isConnected = false;
+
 export default prisma;
+export const initializeDatabase = async () => {
+  await prisma.$connect();
+  isConnected = true;
+};
+
+export const getDBStatus = () => {
+  return isConnected;
+};

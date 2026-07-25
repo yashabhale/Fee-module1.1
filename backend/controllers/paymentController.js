@@ -331,10 +331,41 @@ export const refundPayment = async (req, res) => {
   }
 };
 
+/**
+ * GET /api/payments/transactions/list
+ * Get all transactions with pagination and filtering
+ */
+export const getTransactions = async (req, res) => {
+  try {
+    const { limit = 10, offset = 0, status, page = 1 } = req.query;
+    
+    const filters = {};
+    if (status) filters.status = status;
+
+    const paginationLimit = parseInt(limit);
+    const paginationOffset = offset ? parseInt(offset) : (parseInt(page) - 1) * paginationLimit;
+
+    const transactions = await PaymentService.getTransactions(filters, paginationLimit, paginationOffset);
+    const total = await PaymentService.countTransactions(filters);
+
+    return sendSuccessResponse(res, 'Transactions retrieved successfully', {
+      data: transactions,
+      total,
+      limit: paginationLimit,
+      offset: paginationOffset,
+      page: parseInt(page)
+    });
+  } catch (error) {
+    logger.error(`Get transactions error: ${error.message}`);
+    return sendErrorResponse(res, error.message, 400);
+  }
+};
+
 export default {
   createOrder,
   verifyPayment,
   handlePaymentWebhook,
   getPaymentStatus,
   refundPayment,
+  getTransactions,
 };

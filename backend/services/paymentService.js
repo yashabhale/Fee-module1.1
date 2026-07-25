@@ -197,6 +197,82 @@ export class PaymentService {
       throw new Error(`Failed to process refund: ${error.message}`);
     }
   }
+
+  /**
+   * Get all transactions with pagination and filtering
+   */
+  static async getTransactions(filters = {}, limit = 10, offset = 0) {
+    try {
+      const { PrismaClient } = await import('@prisma/client');
+      const prisma = new PrismaClient();
+
+      const where = {};
+      if (filters.status) {
+        where.status = filters.status;
+      }
+
+      const transactions = await prisma.payment.findMany({
+        where,
+        include: {
+          feePayment: {
+            include: {
+              student: {
+                select: {
+                  firstName: true,
+                  lastName: true,
+                  studentId: true
+                }
+              }
+            }
+          }
+        },
+        orderBy: { transactionDate: 'desc' },
+        take: limit,
+        skip: offset
+      });
+
+      await prisma.$disconnect();
+
+      return transactions.map(t => ({
+        id: t.id,
+        studentName: t.feePayment?.student 
+          ? `${t.feePayment.student.firstName} ${t.feePayment.student.lastName}`
+          : 'N/A',
+        amount: Number(t.amount),
+        method: t.paymentMethod,
+        status: t.status,
+        date: t.transactionDate,
+        invoiceId: t.feePaymentId,
+        transactionId: t.transactionId
+      }));
+    } catch (error) {
+      logger.error(`Get transactions error: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Count transactions matching filters
+   */
+  static async countTransactions(filters = {}) {
+    try {
+      const { PrismaClient } = await import('@prisma/client');
+      const prisma = new PrismaClient();
+
+      const where = {};
+      if (filters.status) {
+        where.status = filters.status;
+      }
+
+      const count = await prisma.payment.count({ where });
+      await prisma.$disconnect();
+
+      return count;
+    } catch (error) {
+      logger.error(`Count transactions error: ${error.message}`);
+      throw error;
+    }
+  }
 }
 
 export default PaymentService;

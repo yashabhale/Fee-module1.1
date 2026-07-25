@@ -403,4 +403,104 @@ export class FeePaymentService {
       throw error;
     }
   }
+
+  /**
+   * Get a single fee payment by ID with related data
+   */
+  static async getFeePaymentById(id) {
+    try {
+      const feePayment = await prisma.feePayment.findUnique({
+        where: { id },
+        include: {
+          student: {
+            include: {
+              course: true,
+              class: true
+            }
+          },
+          feeStructure: {
+            include: {
+              components: true
+            }
+          },
+          payments: true
+        }
+      });
+
+      return feePayment;
+    } catch (error) {
+      logger.error(`Get fee payment by ID error: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Get pending fees with filters and pagination
+   */
+  static async getPendingFees(filters = {}, skip = 0, limit = 10) {
+    try {
+      const where = {
+        paymentStatus: {
+          in: ['PENDING', 'PARTIAL', 'OVERDUE']
+        }
+      };
+
+      if (filters.studentId) {
+        where.studentId = filters.studentId;
+      }
+      if (filters.classId) {
+        where.student = {
+          classId: filters.classId
+        };
+      }
+
+      const pendingFees = await prisma.feePayment.findMany({
+        where,
+        include: {
+          student: {
+            include: {
+              course: true,
+              class: true
+            }
+          }
+        },
+        orderBy: { dueDate: 'asc' },
+        skip,
+        take: limit
+      });
+
+      return pendingFees;
+    } catch (error) {
+      logger.error(`Get pending fees error: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Count pending fees matching filters
+   */
+  static async countPendingFees(filters = {}) {
+    try {
+      const where = {
+        paymentStatus: {
+          in: ['PENDING', 'PARTIAL', 'OVERDUE']
+        }
+      };
+
+      if (filters.studentId) {
+        where.studentId = filters.studentId;
+      }
+      if (filters.classId) {
+        where.student = {
+          classId: filters.classId
+        };
+      }
+
+      const count = await prisma.feePayment.count({ where });
+      return count;
+    } catch (error) {
+      logger.error(`Count pending fees error: ${error.message}`);
+      throw error;
+    }
+  }
 }

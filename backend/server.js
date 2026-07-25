@@ -12,6 +12,7 @@ import feePaymentRoutes from './routes/feePaymentRoutes.js';
 import refundRoutes from './routes/refundRoutes.js';
 import paymentRoutes from './routes/paymentRoutes.js';
 import reportRoutes from './routes/reportRoutes.js';
+import notificationRoutes from './routes/notificationRoutes.js';
 
 dotenv.config();
 
@@ -44,6 +45,7 @@ app.use('/api/fee-payments', feePaymentRoutes);
 app.use('/api/refunds', refundRoutes);
 app.use('/api/payments', paymentRoutes);
 app.use('/api/reports', reportRoutes);
+app.use('/api/notifications', notificationRoutes);
 
 // 404 Handler
 app.use((req, res) => {

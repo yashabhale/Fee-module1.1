@@ -444,4 +444,110 @@ export const rejectRefundRequest = async (refundId, rejectionReason) => {
   }
 }
 
+// ==================== AUTHENTICATION ENDPOINTS ====================
+
+/**
+ * Login user with email and password
+ * @param {string} email - User email
+ * @param {string} password - User password
+ * @returns {Promise<{success: boolean, user?: Object, token?: string, expiresIn?: number, message?: string}>}
+ */
+export const loginUser = async (email, password) => {
+  try {
+    console.log('🔐 Attempting login...')
+    
+    const response = await api.post('/auth/login', { email, password })
+    
+    const { user, token, expiresIn } = response.data.data || response.data
+    
+    console.log('✅ Login successful')
+    return {
+      success: true,
+      user,
+      token,
+      expiresIn
+    }
+  } catch (error) {
+    const errorMessage = error?.response?.data?.message || 'Login failed. Please check your credentials.'
+    console.error('🔐 Login Error:', errorMessage)
+    return {
+      success: false,
+      message: errorMessage
+    }
+  }
+}
+
+/**
+ * Logout user
+ * @returns {Promise<{success: boolean}>}
+ */
+export const logoutUser = async () => {
+  try {
+    console.log('🚪 Logging out...')
+    
+    await api.post('/auth/logout')
+    
+    console.log('✅ Logout successful')
+    return { success: true }
+  } catch (error) {
+    // Logout on frontend regardless of backend response
+    console.warn('🚪 Logout warning:', error.message)
+    return { success: true }
+  }
+}
+
+/**
+ * Get current authenticated user
+ * @returns {Promise<{success: boolean, user?: Object, message?: string}>}
+ */
+export const getCurrentUser = async () => {
+  try {
+    console.log('👤 Fetching current user...')
+    
+    const response = await api.get('/auth/me')
+    
+    console.log('✅ Current user fetched')
+    return {
+      success: true,
+      user: response.data.data || response.data
+    }
+  } catch (error) {
+    const errorMessage = error?.response?.data?.message || 'Failed to fetch user'
+    console.error('👤 Get User Error:', errorMessage)
+    return {
+      success: false,
+      message: errorMessage
+    }
+  }
+}
+
+/**
+ * Refresh authentication token
+ * @param {string} refreshToken - Refresh token
+ * @returns {Promise<{success: boolean, token?: string, expiresIn?: number, message?: string}>}
+ */
+export const refreshToken = async (refreshToken) => {
+  try {
+    console.log('🔄 Refreshing token...')
+    
+    const response = await api.post('/auth/refresh-token', { refreshToken })
+    
+    const { token, expiresIn } = response.data.data || response.data
+    
+    console.log('✅ Token refreshed')
+    return {
+      success: true,
+      token,
+      expiresIn
+    }
+  } catch (error) {
+    const errorMessage = error?.response?.data?.message || 'Failed to refresh token'
+    console.error('🔄 Refresh Token Error:', errorMessage)
+    return {
+      success: false,
+      message: errorMessage
+    }
+  }
+}
+
 export default api

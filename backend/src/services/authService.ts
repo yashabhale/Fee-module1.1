@@ -1,8 +1,11 @@
 const bcrypt = require('bcryptjs');
 import prisma from '../config/database';
+import { getDBStatus } from '../config/database';
 import { generateTokenPair } from '../config/jwt';
 import { ConflictError, NotFoundError, AuthenticationError } from '../middleware/errorHandler';
 import { UserRole } from '@prisma/client';
+import { mockUsers } from './mockDataService';
+import logger from '../config/logger';
 
 export class AuthService {
   async register(
@@ -13,113 +16,197 @@ export class AuthService {
     password: string,
     role: UserRole = 'STAFF'
   ) {
-    // Check if user already exists
-    const existingUser = await prisma.user.findFirst({
-      where: { OR: [{ email }, { phone }] },
-    });
+    try {
+      // Check if user already exists
+      const existingUser = await prisma.user.findFirst({
+        where: { OR: [{ email }, { phone }] },
+      });
 
-    if (existingUser) {
-      throw new ConflictError('Email or phone already registered');
-    }
+      if (existingUser) {
+        throw new ConflictError('Email or phone already registered');
+      }
 
-    // Hash password
-    const hashedPassword = await bcrypt.hash(password, 10);
+      // Hash password
+      const hashedPassword = await bcrypt.hash(password, 10);
 
-    // Create user
-    const user = await prisma.user.create({
-      data: {
-        firstName,
-        lastName,
-        email,
-        phone,
-        password: hashedPassword,
-        role,
-      },
-    });
+      // Create user
+      const user = await prisma.user.create({
+        data: {
+          firstName,
+          lastName,
+          email,
+          phone,
+          password: hashedPassword,
+          role,
+        },
+      });
 
-    // Generate tokens
-    const tokens = generateTokenPair({
-      id: user.id,
-      email: user.email,
-      role: user.role,
-    });
-
-    return {
-      user: {
+      // Generate tokens
+      const tokens = generateTokenPair({
         id: user.id,
-        firstName: user.firstName,
-        lastName: user.lastName,
         email: user.email,
         role: user.role,
-      },
-      ...tokens,
-    };
+      });
+
+      return {
+        user: {
+          id: user.id,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          email: user.email,
+          role: user.role,
+        },
+        ...tokens,
+      };
+    } catch (error: any) {
+      // In development without database, use mock data
+      if (!getDBStatus() && process.env.NODE_ENV === 'development') {
+        logger.warn('📦 Using mock data for user registration (database unavailable)');
+        const hashedPassword = await bcrypt.hash(password, 10);
+        const mockUser = {
+          id: Date.now().toString(),
+          firstName,
+          lastName,
+          email,
+          phone,
+          password: hashedPassword,
+          role,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        };
+
+        const tokens = generateTokenPair({
+          id: mockUser.id,
+          email: mockUser.email,
+          role: mockUser.role,
+        });
+
+        return {
+          user: {
+            id: mockUser.id,
+            firstName: mockUser.firstName,
+            lastName: mockUser.lastName,
+            email: mockUser.email,
+            role: mockUser.role,
+          },
+          ...tokens,
+        };
+      }
+      throw error;
+    }
   }
 
   async login(email: string, password: string) {
-    // Find user
-    const user = await prisma.user.findUnique({
-      where: { email },
-    });
+    try {
+      // Find user
+      const user = await prisma.user.findUnique({
+        where: { email },
+      });
 
-    if (!user) {
-      throw new AuthenticationError('Invalid email or password');
-    }
+      if (!user) {
+        throw new AuthenticationError('Invalid email or password');
+      }
 
-    // Verify password
-    const passwordMatch = await bcrypt.compare(password, user.password);
+      // Verify password
+      const passwordMatch = await bcrypt.compare(password, user.password);
 
-    if (!passwordMatch) {
-      throw new AuthenticationError('Invalid email or password');
-    }
+      if (!passwordMatch) {
+        throw new AuthenticationError('Invalid email or password');
+      }
 
-    // Update last login
-    await prisma.user.update({
-      where: { id: user.id },
-      data: { lastLogin: new Date() },
-    });
+      // Update last login
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { lastLogin: new Date() },
+      });
 
-    // Generate tokens
-    const tokens = generateTokenPair({
-      id: user.id,
-      email: user.email,
-      role: user.role,
-    });
-
-    return {
-      user: {
+      // Generate tokens
+      const tokens = generateTokenPair({
         id: user.id,
-        firstName: user.firstName,
-        lastName: user.lastName,
         email: user.email,
         role: user.role,
-      },
-      ...tokens,
-    };
+      });
+
+      return {
+        user: {
+          id: user.id,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          email: user.email,
+          role: user.role,
+        },
+        ...tokens,
+      };
+    } catch (error: any) {
+      // In development without database, use mock users
+      if (!getDBStatus() && process.env.NODE_ENV === 'development') {
+        logger.warn('📦 Using mock data for login (database unavailable)');
+        
+        // Find mock user
+        const mockUser = mockUsers.find(u => u.email === email);
+        
+        if (!mockUser) {
+          logger.info(`ℹ️ Mock login attempted with email: ${email}`);
+          logger.info(`📝 Available mock credentials:`);
+          mockUsers.forEach(u => logger.info(`   - ${u.email} / Admin@2024`));
+          throw new AuthenticationError('Invalid email or password');
+        }
+
+        // Verify password (using stored hash)
+        const passwordMatch = await bcrypt.compare(password, mockUser.password);
+
+        if (!passwordMatch) {
+          throw new AuthenticationError('Invalid email or password');
+        }
+
+        // Generate tokens
+        const tokens = generateTokenPair({
+          id: mockUser.id,
+          email: mockUser.email,
+          role: mockUser.role as UserRole,
+        });
+
+        return {
+          user: {
+            id: mockUser.id,
+            firstName: mockUser.name.split(' ')[0],
+            lastName: mockUser.name.split(' ')[1] || '',
+            email: mockUser.email,
+            role: mockUser.role,
+          },
+          ...tokens,
+        };
+      }
+      throw error;
+    }
   }
 
   async getUserById(id: string) {
-    const user = await prisma.user.findUnique({
-      where: { id },
-      select: {
-        id: true,
-        firstName: true,
-        lastName: true,
-        email: true,
-        phone: true,
-        role: true,
-        departmentName: true,
-        isActive: true,
-        lastLogin: true,
-        createdAt: true,
-      },
-    });
+    try {
+      const user = await prisma.user.findUnique({
+        where: { id },
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          email: true,
+          phone: true,
+          role: true,
+          departmentName: true,
+          isActive: true,
+          lastLogin: true,
+          createdAt: true,
+        },
+      });
 
-    if (!user) {
-      throw new NotFoundError('User not found');
+      if (!user) {
+        throw new NotFoundError('User not found');
+      }
+
+      return user;
+    } catch (error: any) {
+      throw error;
     }
-
-    return user;
   }
 
   async updateUser(

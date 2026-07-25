@@ -1,29 +1,31 @@
-import mongoose from 'mongoose';
+import { PrismaClient } from '@prisma/client';
 import logger from './logger.js';
+
+const prisma = new PrismaClient({
+  log: process.env.NODE_ENV === 'development' 
+    ? ['query', 'info', 'warn', 'error']
+    : ['warn', 'error']
+});
 
 export const connectDB = async () => {
   try {
-    const mongoURI = process.env.MONGODB_URI || 'mongodb://localhost:27017/fee-management';
-    
-    const connection = await mongoose.connect(mongoURI, {
-      useNewUrlParser: true,
-      useUnifiedTopology: true,
-      serverSelectionTimeoutMS: 5000,
-    });
-
-    logger.info(`MongoDB Connected: ${connection.connection.host}`);
-    return connection;
+    // Test the database connection
+    await prisma.$queryRaw`SELECT 1`;
+    logger.info('PostgreSQL Connected via Prisma');
+    return prisma;
   } catch (error) {
-    logger.error(`MongoDB Connection Error: ${error.message}`);
+    logger.error(`PostgreSQL Connection Error: ${error.message}`);
     process.exit(1);
   }
 };
 
 export const disconnectDB = async () => {
   try {
-    await mongoose.disconnect();
-    logger.info('MongoDB Disconnected');
+    await prisma.$disconnect();
+    logger.info('PostgreSQL Disconnected');
   } catch (error) {
-    logger.error(`MongoDB Disconnection Error: ${error.message}`);
+    logger.error(`PostgreSQL Disconnection Error: ${error.message}`);
   }
 };
+
+export default prisma;

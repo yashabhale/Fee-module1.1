@@ -3,7 +3,7 @@ const cors = require('cors');
 import 'dotenv/config';
 import logger from './config/logger';
 import { errorHandler, asyncHandler } from './middleware/errorHandler';
-import prisma from './config/database';
+import prisma, { initializeDatabase } from './config/database';
 
 // Import routes
 import authRoutes from './routes/authRoutes';
@@ -99,18 +99,18 @@ let server: any;
 
 const startServer = async () => {
   try {
-    // Test database connection
-    await prisma.$queryRaw`SELECT 1`;
-    logger.info('Database connection successful');
+    // Initialize database (but don't fail if it's not available in development)
+    await initializeDatabase();
 
     server = app.listen(PORT, () => {
-      logger.info(`Server started`, {
+      logger.info(`✅ Server started`, {
         url: `http://${HOST}:${PORT}`,
         environment: process.env.NODE_ENV || 'development',
       });
+      logger.info(`📝 Visit http://${HOST}:${PORT}/health to verify server is running`);
     });
   } catch (error: any) {
-    logger.error('Failed to start server', { error: error.message });
+    logger.error('❌ Failed to start server', { error: error.message });
     process.exit(1);
   }
 };

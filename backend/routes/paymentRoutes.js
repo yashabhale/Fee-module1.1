@@ -52,4 +52,10 @@ router.get('/status/:paymentId', authenticateToken, paymentController.getPayment
  */
 router.post('/refund', authenticateToken, paymentController.refundPayment);
 
+/**
+ * GET /api/payments/transactions/list
+ * Get all transactions with pagination and filtering
+ */
+router.get('/transactions/list', authenticateToken, paymentController.getTransactions);
+
 export default router;
