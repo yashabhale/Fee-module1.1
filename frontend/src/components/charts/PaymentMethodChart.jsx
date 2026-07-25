@@ -32,9 +32,9 @@ const CustomTooltip = ({ active, payload }) => {
 
 const PaymentMethodChart = ({ data = [] }) => {
   const defaultData = [
-    { name: 'Online', value: 720000 },
-    { name: 'Cheque', value: 280000 },
-    { name: 'Cash', value: 195000 },
+    { name: 'Online', value: 7200 },
+    { name: 'Cheque', value: 2800 },
+    { name: 'Cash', value: 1950 },
   ]
 
   const colors = ['#22c55e', '#108fb9', '#0ea5e9', '#f59e0b', '#f97316']

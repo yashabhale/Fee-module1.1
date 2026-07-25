@@ -33,7 +33,9 @@ const Fees = () => {
   }
 
   const handleNotifyPending = () => {
-    const pendingRecords = filteredTransactions.filter(tx => tx.status === 'Pending' || (tx.amountPaid || 0) < tx.amount)
+    const pendingRecords = filteredTransactions.filter(
+      tx => tx.status === 'Pending' || (tx.amountPaid || 0) < tx.amount
+    )
     if (pendingRecords.length > 0) {
       showToast(`Your fee is pending for ${pendingRecords.length} student(s)`, 'warning')
     } else {
@@ -47,7 +49,11 @@ const Fees = () => {
     if (filterStatus !== 'All') {
       filtered = filtered.filter((tx) => {
         if (filterStatus === 'Partially Paid') {
-          return tx.status === 'Pending' && (tx.amountPaid || 0) > 0 && (tx.amountPaid || 0) < tx.amount
+          return (
+            tx.status === 'Pending' &&
+            (tx.amountPaid || 0) > 0 &&
+            (tx.amountPaid || 0) < tx.amount
+          )
         }
         return tx.status === filterStatus
       })
@@ -65,10 +71,8 @@ const Fees = () => {
     setFilteredTransactions(filtered)
   }
 
-  // ✅ FIXED FUNCTION
   const handleView = (transaction) => {
     if (transaction.status === 'Paid') {
-
       const paymentData = {
         invoiceId: transaction.invoiceId,
         studentName: transaction.studentName,
@@ -79,12 +83,36 @@ const Fees = () => {
       }
 
       sessionStorage.setItem('paymentData', JSON.stringify(paymentData))
-
       navigate('/payment-success')
-
     } else {
       navigate(`/invoice/${transaction.invoiceId}`)
     }
+  }
+
+  // ✅ WhatsApp Handler
+  const handleWhatsApp = (tx) => {
+    const phone = tx.phone || '91XXXXXXXXXX'
+
+    const message = `Hello ${tx.studentName},
+Your fee details:
+Total: ₹${tx.amount}
+Paid: ₹${tx.amountPaid || 0}
+Pending: ₹${tx.amount - (tx.amountPaid || 0)}
+
+Please complete your payment.`
+
+    const url = `https://wa.me/${phone}?text=${encodeURIComponent(message)}`
+    window.open(url, '_blank')
+  }
+
+  // ✅ SMS Handler
+  const handleSMS = (tx) => {
+    const phone = tx.phone || 'XXXXXXXXXX'
+
+    const message = `Hello ${tx.studentName}, your pending fee is ₹${tx.amount - (tx.amountPaid || 0)}. Please pay soon.`
+
+    const url = `sms:${phone}?body=${encodeURIComponent(message)}`
+    window.open(url)
   }
 
   const getPaymentStatus = (transaction) => {
@@ -142,12 +170,10 @@ const Fees = () => {
 
         <div className="flex gap-2">
           <button onClick={handleNotifyPaid} className="btn btn-success btn-sm">
-            <Bell size={14} />
-            Notify Paid
+            <Bell size={14} /> Notify Paid
           </button>
           <button onClick={handleNotifyPending} className="btn btn-warning btn-sm">
-            <Bell size={14} />
-            Notify Pending
+            <Bell size={14} /> Notify Pending
           </button>
         </div>
       </div>
@@ -166,6 +192,7 @@ const Fees = () => {
                   <th>Pending Amount</th>
                   <th>Status</th>
                   <th>Action</th>
+                  <th>Notify</th> {/* ✅ New Column */}
                 </tr>
               </thead>
               <tbody>
@@ -191,6 +218,26 @@ const Fees = () => {
                           <Eye size={14} /> View
                         </button>
                       </td>
+
+                      {/* ✅ Notify Buttons */}
+                      <td>
+                        <div className="flex gap-2">
+                          <button
+                            className="btn btn-success btn-sm"
+                            onClick={() => handleWhatsApp(tx)}
+                          >
+                            <FaWhatsapp size={16} />
+                          </button>
+
+                          <button
+                            className="btn btn-primary btn-sm"
+                            onClick={() => handleSMS(tx)}
+                          >
+                            <MdSms size={16} />
+                          </button>
+                        </div>
+                      </td>
+
                     </tr>
                   )
                 })}

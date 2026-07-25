@@ -6,12 +6,12 @@
 
 import express from 'express';
 import dashboardController from '../controllers/dashboardController';
-import { authenticateToken, authorizeRole } from '../middleware/auth';
+import { authenticate, authorize } from '../middleware/auth';
 
 const router = express.Router();
 
 // All dashboard routes require authentication
-router.use(authenticateToken);
+router.use(authenticate);
 
 /**
  * GET /api/dashboard/stats
@@ -57,7 +57,7 @@ router.get('/status-distribution', dashboardController.getStatusDistribution);
  */
 router.get(
   '/by-class',
-  authorizeRole('ADMIN', 'ACCOUNTANT'),
+  authorize('ADMIN', 'ACCOUNTANT'),
   dashboardController.getCollectionByClass
 );
 
@@ -69,7 +69,7 @@ router.get(
  */
 router.get(
   '/outstanding',
-  authorizeRole('ADMIN', 'ACCOUNTANT'),
+  authorize('ADMIN', 'ACCOUNTANT'),
   dashboardController.getOutstandingBalances
 );
 
@@ -80,7 +80,7 @@ router.get(
  */
 router.get(
   '/refund-stats',
-  authorizeRole('ADMIN', 'ACCOUNTANT'),
+  authorize('ADMIN', 'ACCOUNTANT'),
   dashboardController.getRefundStats
 );
 
@@ -92,7 +92,7 @@ router.get(
  */
 router.get(
   '/daily-trend',
-  authorizeRole('ADMIN', 'ACCOUNTANT'),
+  authorize('ADMIN', 'ACCOUNTANT'),
   dashboardController.getDailyTrend
 );
 
@@ -103,7 +103,7 @@ router.get(
  */
 router.get(
   '/overdue',
-  authorizeRole('ADMIN', 'ACCOUNTANT'),
+  authorize('ADMIN', 'ACCOUNTANT'),
   dashboardController.getOverdueInvoices
 );
 

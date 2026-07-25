@@ -138,3 +138,14 @@ export const getFinancialDashboardData = async (req, res, next) => {
     return sendErrorResponse(res, error.message, 400);
   }
 };
+
+export const getRecentTransactions = async (req, res, next) => {
+  try {
+    const { limit = 5 } = req.query;
+    const transactions = await FeePaymentService.getRecentTransactions(parseInt(limit) || 5);
+    return sendSuccessResponse(res, 'Recent transactions retrieved successfully', transactions);
+  } catch (error) {
+    logger.error(`Get recent transactions error: ${error.message}`);
+    return sendErrorResponse(res, error.message, 400);
+  }
+};

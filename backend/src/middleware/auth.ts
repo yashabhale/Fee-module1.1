@@ -28,35 +28,41 @@ export const authenticate = (
     next();
   } catch (err: any) {
     if (err.name === 'TokenExpiredError') {
-      throw new AuthenticationError('Token has expired');
+      next(new AuthenticationError('Token has expired'));
+    } else if (err.name === 'JsonWebTokenError') {
+      next(new AuthenticationError('Invalid token'));
+    } else if (err instanceof AuthenticationError) {
+      next(err);
+    } else {
+      next(new AuthenticationError(err.message || 'Authentication failed'));
     }
-    if (err.name === 'JsonWebTokenError') {
-      throw new AuthenticationError('Invalid token');
-    }
-    throw new AuthenticationError(err.message);
   }
 };
 
 export const authorize = (...allowedRoles: string[]) => {
   return (req: Request, res: Response, next: NextFunction) => {
-    if (!req.user) {
-      throw new AuthenticationError('User not authenticated');
+    try {
+      if (!req.user) {
+        throw new AuthenticationError('User not authenticated');
+      }
+
+      if (!allowedRoles.includes(req.user.role)) {
+        logger.warn('Unauthorized access attempt', {
+          userId: req.user.id,
+          userRole: req.user.role,
+          requiredRoles: allowedRoles,
+          path: req.path,
+        });
+
+        throw new AuthorizationError(
+          `This action requires one of these roles: ${allowedRoles.join(', ')}`
+        );
+      }
+
+      next();
+    } catch (err) {
+      next(err);
     }
-
-    if (!allowedRoles.includes(req.user.role)) {
-      logger.warn('Unauthorized access attempt', {
-        userId: req.user.id,
-        userRole: req.user.role,
-        requiredRoles: allowedRoles,
-        path: req.path,
-      });
-
-      throw new AuthorizationError(
-        `This action requires one of these roles: ${allowedRoles.join(', ')}`
-      );
-    }
-
-    next();
   };
 };
 

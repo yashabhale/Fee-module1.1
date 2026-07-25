@@ -1,15 +1,6 @@
 // Dummy Refund Request Data
 export const initialRefundData = [
-  {
-    id: "REF-2024-001",
-    studentName: "Aarav Sharma",
-    invoiceId: "INV-2024-015",
-    amount: 25000,
-    reason: "Duplicate Payment",
-    status: "Pending",
-    requestedDate: "2024-03-08",
-    adminNotes: ""
-  },
+ 
   {
     id: "REF-2024-002",
     studentName: "Priya Kapoor",

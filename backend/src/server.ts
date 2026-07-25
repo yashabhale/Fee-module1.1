@@ -10,6 +10,8 @@ import authRoutes from './routes/authRoutes';
 import studentRoutes from './routes/studentRoutes';
 import feePaymentRoutes from './routes/feePaymentRoutes';
 import refundRoutes from './routes/refundRoutes';
+import reportRoutes from './routes/reportRoutes';
+import dashboardRoutes from './routes/dashboardRoutes';
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -49,6 +51,8 @@ app.use('/api/auth', authRoutes);
 app.use('/api/students', studentRoutes);
 app.use('/api/fee-payments', feePaymentRoutes);
 app.use('/api/refunds', refundRoutes);
+app.use('/api/reports', reportRoutes);
+app.use('/api/dashboard', dashboardRoutes);
 
 // 404 handler
 app.use((req: Request, res: Response) => {

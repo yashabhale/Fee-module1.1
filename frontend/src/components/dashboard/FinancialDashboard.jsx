@@ -1,7 +1,7 @@
 import { transactionsData } from "../../data/transactionsData";
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import axios from 'axios';
+import api from '../../services/apiService.js';
 import MonthlyFeeChart from '../charts/MonthlyFeeChart';
 import PaymentMethodChart from '../charts/PaymentMethodChart';
 import TransactionsTable from './TransactionsTable';
@@ -22,19 +22,10 @@ const FinancialDashboard = () => {
         setLoading(true);
         setError(null);
 
-        // Get token from localStorage (adjust based on your auth setup)
-        const token = localStorage.getItem('token');
-
-        const response = await axios.get(
-          `${import.meta.env.VITE_API_URL}/api/fee-payments/dashboard`,
-          {
-            params: { year: selectedYear },
-            headers: {
-              Authorization: `Bearer ${token}`,
-              'Content-Type': 'application/json'
-            }
-          }
-        );
+        // Use the pre-configured api instance from apiService
+        const response = await api.get('/fee-payments/dashboard', {
+          params: { year: selectedYear }
+        });
 
         if (response.data.success) {
           setDashboardData(response.data.data);

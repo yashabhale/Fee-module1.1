@@ -4,12 +4,16 @@
  * Run this after configuring environment variables
  */
 
+// Get API base URL from environment variables
+const API_BASE_URL = `${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api`;
+const BACKEND_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+
 // Test 1: Create Payment Order
 export async function testCreateOrder() {
   console.log('🧪 Test 1: Create Payment Order')
   
   try {
-    const response = await fetch('http://localhost:5000/api/payments/create-order', {
+    const response = await fetch(`${API_BASE_URL}/payments/create-order`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -44,7 +48,7 @@ export async function testVerifyPayment(token) {
   
   try {
     // Example values - replace with actual payment data
-    const response = await fetch('http://localhost:5000/api/payments/verify-payment', {
+    const response = await fetch(`${API_BASE_URL}/payments/verify-payment`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -73,7 +77,7 @@ export async function testGetPaymentStatus(paymentId, token) {
   console.log('\n🧪 Test 3: Get Payment Status')
   
   try {
-    const response = await fetch(`http://localhost:5000/api/payments/status/${paymentId}`, {
+    const response = await fetch(`${API_BASE_URL}/payments/status/${paymentId}`, {
       method: 'GET',
       headers: { 'Authorization': `Bearer ${token}` }
     })
@@ -158,7 +162,7 @@ export async function testDatabaseConnection() {
   console.log('\n🧪 Test 6: Database Connection')
   
   try {
-    const response = await fetch('http://localhost:5000/health')
+    const response = await fetch(`${BACKEND_URL}/health`)
     const data = await response.json()
     
     if (response.ok && data.success) {
@@ -181,7 +185,7 @@ export async function testCORSConfiguration() {
   console.log('\n🧪 Test 7: CORS Configuration')
   
   try {
-    const response = await fetch('http://localhost:5000/api/payments/create-order', {
+    const response = await fetch(`${API_BASE_URL}/payments/create-order`, {
       method: 'OPTIONS',
       headers: {
         'Origin': window.location.origin,
