@@ -181,6 +181,62 @@ export class RefundService {
     return processed;
   }
 
+  async getRefundRequestById(refundId: string) {
+    const refund = await prisma.refundRequest.findUnique({
+      where: { id: refundId },
+      include: {
+        student: {
+          select: {
+            id: true,
+            studentId: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+            phone: true,
+          },
+        },
+        feePayment: {
+          select: {
+            id: true,
+            totalAmount: true,
+            amountPaid: true,
+            amountPending: true,
+            paymentStatus: true,
+            dueDate: true,
+            payments: {
+              select: {
+                id: true,
+                amount: true,
+                paymentMethod: true,
+                transactionId: true,
+                createdAt: true,
+              },
+              orderBy: { createdAt: 'desc' },
+            },
+          },
+        },
+        approver: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+          },
+        },
+        creator: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+          },
+        },
+      },
+    });
+
+    return refund;
+  }
+
   async getRefundRequests(
     page: number = 1,
     limit: number = 10,

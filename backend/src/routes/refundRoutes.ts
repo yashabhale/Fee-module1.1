@@ -11,6 +11,9 @@ router.use(authenticate);
 // POST - Create refund request (any authenticated user)
 router.post('/', refundController.createRefund);
 
+// GET - Get refund by ID
+router.get('/:id', refundController.getRefundById);
+
 // GET - Get refunds
 router.get(
   '/',

@@ -22,7 +22,6 @@ const RazorpayPaymentModal = ({
   studentId,
   amount,
   invoiceId,
-  totalAmount,
   onSuccess,
   onFailure,
 }) => {
@@ -54,12 +53,10 @@ const RazorpayPaymentModal = ({
       setLoading(true);
       setError(null);
 
-      const response = await axios.post(`${API_BASE_URL}/payments/create-order`, {
+      const response = await axios.post(`${API_BASE_URL}/payments/razorpay/create-order`, {
         amount: parseFloat(amount),
-        studentName,
-        studentId,
         invoiceId,
-        totalAmount: parseFloat(totalAmount),
+        currency: 'INR',
       });
 
       if (!response.data.success) {
@@ -83,11 +80,11 @@ const RazorpayPaymentModal = ({
    */
   const verifyPaymentOnBackend = async (paymentData) => {
     try {
-      const response = await axios.post(`${API_BASE_URL}/payments/verify`, {
-        orderId: paymentData.orderId,
-        paymentId: paymentData.paymentId,
-        signature: paymentData.signature,
-        studentId,
+      const response = await axios.post(`${API_BASE_URL}/payments/razorpay/verify`, {
+        razorpay_order_id: paymentData.orderId,
+        razorpay_payment_id: paymentData.paymentId,
+        razorpay_signature: paymentData.signature,
+        invoiceId,
         amount: paymentData.amount,
       });
 

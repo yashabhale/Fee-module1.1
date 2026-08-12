@@ -1,61 +1,61 @@
-import React, { useEffect, useState } from 'react'
+/* eslint-disable react-hooks/set-state-in-effect */
+import React, { useEffect, useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Search, Eye, ArrowLeft, Bell } from 'lucide-react'
 import { FaWhatsapp } from 'react-icons/fa'
 import { MdSms } from 'react-icons/md'
-import { transactionsData } from '../data/transactionsData'
+import { fetchTransactions, sendWhatsAppMessage, sendSMSMessage } from '../services/apiService'
 
 const Fees = () => {
   const navigate = useNavigate()
   const [filteredTransactions, setFilteredTransactions] = useState([])
+  const [allTransactions, setAllTransactions] = useState([])
   const [searchTerm, setSearchTerm] = useState('')
   const [filterStatus, setFilterStatus] = useState('All')
-  const [toast, setToast] = useState(null)
+  const [loading, setLoading] = useState(true)
 
   const statusOptions = ['All', 'Paid', 'Pending', 'Failed', 'Partially Paid']
 
-  useEffect(() => {
-    filterTransactions()
-  }, [searchTerm, filterStatus])
-
-  const showToast = (message, type = 'info') => {
-    setToast({ message, type })
-    setTimeout(() => setToast(null), 3000)
-  }
-
-  const handleNotifyPaid = () => {
-    const paidRecords = filteredTransactions.filter(tx => tx.status === 'Paid')
-    if (paidRecords.length > 0) {
-      showToast(`Fees paid successfully for ${paidRecords.length} student(s)`, 'success')
-    } else {
-      showToast('No paid records found', 'info')
+  const loadTransactions = useCallback(async () => {
+    setLoading(true)
+    try {
+      const result = await fetchTransactions()
+      if (result.success && Array.isArray(result.data)) {
+        const transformed = result.data.map((tx) => ({
+          id: tx.id || tx.invoiceId,
+          invoiceId: tx.invoiceId || tx.id,
+          studentName: tx.studentName || 'Unknown',
+          class: tx.class || tx.academicYear || 'N/A',
+          amount: Number(tx.totalAmount || tx.amount || 0),
+          amountPaid: Number(tx.amountPaid || 0),
+          status: tx.paymentStatus || tx.status || 'Pending',
+          paymentMethod: tx.payments?.[0]?.paymentMethod || tx.paymentMethod || 'N/A',
+          phone: tx.student?.phone || '',
+          date: tx.createdAt || tx.date || new Date().toISOString(),
+        }))
+        setAllTransactions(transformed)
+        setFilteredTransactions(transformed)
+      }
+    } catch (error) {
+      console.error('Error loading transactions:', error)
+    } finally {
+      setLoading(false)
     }
-  }
+  }, [])
 
-  const handleNotifyPending = () => {
-    const pendingRecords = filteredTransactions.filter(
-      tx => tx.status === 'Pending' || (tx.amountPaid || 0) < tx.amount
-    )
-    if (pendingRecords.length > 0) {
-      showToast(`Your fee is pending for ${pendingRecords.length} student(s)`, 'warning')
-    } else {
-      showToast('No pending records found', 'info')
-    }
-  }
-
-  const filterTransactions = () => {
-    let filtered = [...transactionsData]
+  const filterTransactions = useCallback(() => {
+    let filtered = [...allTransactions]
 
     if (filterStatus !== 'All') {
       filtered = filtered.filter((tx) => {
         if (filterStatus === 'Partially Paid') {
           return (
-            tx.status === 'Pending' &&
+            (tx.status === 'PENDING' || tx.status === 'PARTIAL') &&
             (tx.amountPaid || 0) > 0 &&
             (tx.amountPaid || 0) < tx.amount
           )
         }
-        return tx.status === filterStatus
+        return tx.status === filterStatus.toUpperCase() || tx.status === filterStatus
       })
     }
 
@@ -64,24 +64,55 @@ const Fees = () => {
         (tx) =>
           tx.studentName.toLowerCase().includes(searchTerm.toLowerCase()) ||
           tx.invoiceId.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          tx.class.toLowerCase().includes(searchTerm.toLowerCase()),
+          (tx.class && tx.class.toLowerCase().includes(searchTerm.toLowerCase())),
       )
     }
 
     setFilteredTransactions(filtered)
+  }, [searchTerm, filterStatus, allTransactions])
+
+  useEffect(() => {
+    loadTransactions()
+  }, [loadTransactions])
+
+  useEffect(() => {
+    filterTransactions()
+  }, [searchTerm, filterStatus, allTransactions, filterTransactions])
+
+  const handleNotifyPaid = async () => {
+    const paidRecords = filteredTransactions.filter(tx => tx.status === 'PAID' || tx.status === 'Paid')
+    if (paidRecords.length > 0) {
+      alert(`Fees paid successfully for ${paidRecords.length} student(s)`)
+    } else {
+      alert('No paid records found')
+    }
   }
 
+  const handleNotifyPending = async () => {
+    const pendingRecords = filteredTransactions.filter(
+      tx => tx.status === 'PENDING' || tx.status === 'Pending' || tx.status === 'PARTIAL' || tx.status === 'Partially Paid' || tx.status === 'OVERDUE'
+    )
+    if (pendingRecords.length > 0) {
+      alert(`Your fee is pending for ${pendingRecords.length} student(s)`)
+    } else {
+      alert('No pending records found')
+    }
+  }
+
+  const getTransactionId = useCallback(() => {
+    return 'TXN' + Date.now() + '-' + Math.random().toString(36).substring(2, 9).toUpperCase()
+  }, [])
+
   const handleView = (transaction) => {
-    if (transaction.status === 'Paid') {
+    if (transaction.status === 'PAID' || transaction.status === 'Paid') {
       const paymentData = {
         invoiceId: transaction.invoiceId,
         studentName: transaction.studentName,
         amount: transaction.amountPaid || transaction.amount,
         paymentMethod: transaction.paymentMethod || 'Cash',
-        transactionId: 'TXN' + Date.now(),
+        transactionId: getTransactionId(),
         timestamp: new Date().toISOString()
       }
-
       sessionStorage.setItem('paymentData', JSON.stringify(paymentData))
       navigate('/payment-success')
     } else {
@@ -89,38 +120,32 @@ const Fees = () => {
     }
   }
 
-  // ✅ WhatsApp Handler
-  const handleWhatsApp = (tx) => {
-    const phone = tx.phone || '91XXXXXXXXXX'
-
-    const message = `Hello ${tx.studentName},
-Your fee details:
-Total: ₹${tx.amount}
-Paid: ₹${tx.amountPaid || 0}
-Pending: ₹${tx.amount - (tx.amountPaid || 0)}
-
-Please complete your payment.`
-
-    const url = `https://wa.me/${phone}?text=${encodeURIComponent(message)}`
-    window.open(url, '_blank')
+  const handleWhatsApp = async (tx) => {
+    const result = await sendWhatsAppMessage(tx.invoiceId)
+    if (result.success) {
+      alert(`WhatsApp message sent to ${tx.studentName}`)
+    } else {
+      alert(result.message || 'Failed to send WhatsApp message')
+    }
   }
 
-  // ✅ SMS Handler
-  const handleSMS = (tx) => {
-    const phone = tx.phone || 'XXXXXXXXXX'
-
-    const message = `Hello ${tx.studentName}, your pending fee is ₹${tx.amount - (tx.amountPaid || 0)}. Please pay soon.`
-
-    const url = `sms:${phone}?body=${encodeURIComponent(message)}`
-    window.open(url)
+  const handleSMS = async (tx) => {
+    const result = await sendSMSMessage(tx.invoiceId)
+    if (result.success) {
+      alert(`SMS sent to ${tx.studentName}`)
+    } else {
+      alert(result.message || 'Failed to send SMS')
+    }
   }
 
   const getPaymentStatus = (transaction) => {
     const amountPaid = transaction.amountPaid || 0
-    if (transaction.status === 'Paid') return { text: 'Paid', class: 'badge-green' }
+    const status = transaction.status
+    if (status === 'PAID' || status === 'Paid') return { text: 'Paid', class: 'badge-green' }
     if (amountPaid > 0 && amountPaid < transaction.amount) return { text: 'Partially Paid', class: 'badge-orange' }
-    if (transaction.status === 'Pending') return { text: 'Pending', class: 'badge-yellow' }
-    return { text: transaction.status, class: 'badge-red' }
+    if (status === 'PENDING' || status === 'Pending') return { text: 'Pending', class: 'badge-yellow' }
+    if (status === 'OVERDUE' || status === 'Overdue') return { text: 'Overdue', class: 'badge-red' }
+    return { text: status, class: 'badge-red' }
   }
 
   const getRemainingAmount = (transaction) => {
@@ -192,11 +217,17 @@ Please complete your payment.`
                   <th>Pending Amount</th>
                   <th>Status</th>
                   <th>Action</th>
-                  <th>Notify</th> {/* ✅ New Column */}
+                  <th>Notify</th>
                 </tr>
               </thead>
               <tbody>
-                {filteredTransactions.map((tx) => {
+                {loading ? (
+                  <tr>
+                    <td colSpan="9" style={{ textAlign: 'center', padding: '40px' }}>
+                      Loading transactions...
+                    </td>
+                  </tr>
+                ) : filteredTransactions.map((tx) => {
                   const statusInfo = getPaymentStatus(tx)
                   const pendingAmount = getRemainingAmount(tx)
 
@@ -205,9 +236,9 @@ Please complete your payment.`
                       <td>{tx.invoiceId}</td>
                       <td>{tx.studentName}</td>
                       <td>{tx.class}</td>
-                      <td>₹{tx.amount}</td>
-                      <td>₹{tx.amountPaid || 0}</td>
-                      <td>₹{pendingAmount}</td>
+                      <td>₹{tx.amount.toLocaleString()}</td>
+                      <td>₹{tx.amountPaid.toLocaleString()}</td>
+                      <td>₹{pendingAmount.toLocaleString()}</td>
                       <td>
                         <span className={`badge ${statusInfo.class}`}>
                           {statusInfo.text}
@@ -219,7 +250,6 @@ Please complete your payment.`
                         </button>
                       </td>
 
-                      {/* ✅ Notify Buttons */}
                       <td>
                         <div className="flex gap-2">
                           <button

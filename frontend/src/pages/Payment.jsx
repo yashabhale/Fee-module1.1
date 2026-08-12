@@ -1,16 +1,18 @@
-import React, { useState, useEffect } from 'react'
+/* eslint-disable react-hooks/set-state-in-effect */
+import React, { useState, useEffect, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { ArrowLeft, Lock, Shield, CreditCard, Building2, QrCode, ChevronRight, AlertCircle } from 'lucide-react'
-import { getInvoiceById, generateTransactionId } from '../data/invoiceData'
+import { fetchInvoiceDetails } from '../services/apiService'
 
 const Payment = () => {
   const { invoiceId } = useParams()
   const navigate = useNavigate()
 
-  const [invoice] = useState(() => getInvoiceById(invoiceId))
+  const [invoice, setInvoice] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
   const [selectedMethod, setSelectedMethod] = useState('razorpay')
   const [processing, setProcessing] = useState(false)
-  const [formError, setFormError] = useState('')
 
   const paymentMethods = [
     {
@@ -33,27 +35,48 @@ const Payment = () => {
     }
   ]
 
-  useEffect(() => {
-    const script = document.createElement('script')
-    script.src = 'https://checkout.razorpay.com/v1/checkout.js'
-    script.async = true
-    document.head.appendChild(script)
-
-    return () => {
-      if (document.head.contains(script)) {
-        document.head.removeChild(script)
+  const loadInvoice = useCallback(async () => {
+    setLoading(true)
+    setError('')
+    try {
+      const result = await fetchInvoiceDetails(invoiceId)
+      if (result.success && result.data) {
+        setInvoice(result.data)
+      } else {
+        setError(result.error || 'Invoice not found')
       }
+    } catch {
+      setError('Failed to load invoice')
+    } finally {
+      setLoading(false)
     }
-  }, [])
+  }, [invoiceId])
 
-  if (!invoice) {
+  useEffect(() => {
+    loadInvoice()
+  }, [loadInvoice])
+
+  if (loading) {
+    return (
+      <div className="page">
+        <div className="card">
+          <div className="card-body text-center">
+            <div className="spinner" style={{ margin: '0 auto 20px' }}></div>
+            <p>Loading invoice...</p>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (error || !invoice) {
     return (
       <div className="page">
         <div className="card">
           <div className="card-body text-center">
             <AlertCircle size={40} style={{ color: 'var(--red)', marginBottom: '16px' }} />
             <h2 className="card-title">Invoice Not Found</h2>
-            <p className="text-muted mb-4">The invoice {invoiceId} does not exist.</p>
+            <p className="text-muted mb-4">{error || `The invoice ${invoiceId} does not exist.`}</p>
             <button onClick={() => navigate('/fees')} className="btn btn-primary">
               Back to Dashboard
             </button>
@@ -65,7 +88,6 @@ const Payment = () => {
 
   const handlePayment = async () => {
     setProcessing(true)
-    setFormError('')
 
     setTimeout(() => {
       sessionStorage.setItem(
@@ -73,11 +95,12 @@ const Payment = () => {
         JSON.stringify({
           invoiceId,
           amount: invoice.totalAmount,
-          transactionId: generateTransactionId(),
+          transactionId: 'TXN' + Date.now(),
           paymentMethod: selectedMethod
         })
       )
       navigate('/payment-success')
+      setProcessing(false)
     }, 1500)
   }
 
@@ -202,13 +225,6 @@ const Payment = () => {
                 </div>
               </div>
             </div>
-
-            {formError && (
-              <div className="info-box info-box-red mt-3">
-                <AlertCircle size={16} />
-                <span>{formError}</span>
-              </div>
-            )}
           </div>
         </div>
       </div>

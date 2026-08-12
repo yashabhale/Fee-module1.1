@@ -1,25 +1,42 @@
-import React, { useState, useEffect } from 'react'
+/* eslint-disable react-hooks/set-state-in-effect */
+import React, { useState, useEffect, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { ArrowLeft, Download, AlertCircle, Edit2 } from 'lucide-react'
-import { getInvoiceById } from '../data/invoiceData'
+import { fetchInvoiceDetails } from '../services/apiService'
 
 const Invoice = () => {
   const { invoiceId } = useParams()
   const navigate = useNavigate()
   const [invoice, setInvoice] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
   const [showPartialInput, setShowPartialInput] = useState(false)
   const [customAmount, setCustomAmount] = useState('')
   const [remainingBalance, setRemainingBalance] = useState(0)
 
-  useEffect(() => {
-    const fetchedInvoice = getInvoiceById(invoiceId)
-    setInvoice(fetchedInvoice)
-    if (fetchedInvoice) {
-      const paid = fetchedInvoice.amountPaid || 0
-      const total = fetchedInvoice.totalAmount
-      setRemainingBalance(total - paid)
+  const loadInvoice = useCallback(async () => {
+    setLoading(true)
+    setError('')
+    try {
+      const result = await fetchInvoiceDetails(invoiceId)
+      if (result.success && result.data) {
+        setInvoice(result.data)
+        const paid = result.data.paidAmount || result.data.amountPaid || 0
+        const total = result.data.totalAmount || 0
+        setRemainingBalance(total - paid)
+      } else {
+        setError(result.error || 'Invoice not found')
+      }
+    } catch {
+      setError('Failed to load invoice')
+    } finally {
+      setLoading(false)
     }
   }, [invoiceId])
+
+  useEffect(() => {
+    loadInvoice()
+  }, [loadInvoice])
 
   const handleProceedToPayment = (amount) => {
     if (amount && amount > 0 && amount <= remainingBalance) {
@@ -46,14 +63,27 @@ const Invoice = () => {
     setCustomAmount(remainingBalance.toString())
   }
 
-  if (!invoice) {
+  if (loading) {
+    return (
+      <div className="page">
+        <div className="card">
+          <div className="card-body" style={{ textAlign: 'center', padding: '40px' }}>
+            <div className="spinner" style={{ margin: '0 auto 20px' }}></div>
+            <p>Loading invoice...</p>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (error || !invoice) {
     return (
       <div className="page">
         <div className="card">
           <div className="card-body" style={{ textAlign: 'center', padding: '40px' }}>
             <AlertCircle size={40} style={{ color: 'var(--red)', marginBottom: '16px' }} />
             <h2 className="card-title">Invoice Not Found</h2>
-            <p className="text-muted mb-4">The invoice {invoiceId} does not exist in our records.</p>
+            <p className="text-muted mb-4">{error || `The invoice ${invoiceId} does not exist in our records.`}</p>
             <button onClick={() => navigate('/fees')} className="btn btn-primary">
               Back to Dashboard
             </button>
@@ -63,7 +93,7 @@ const Invoice = () => {
     )
   }
 
-  const amountPaid = invoice.amountPaid || 0
+  const amountPaid = invoice.paidAmount || invoice.amountPaid || 0
   const isFullyPaid = remainingBalance <= 0
 
   return (
@@ -127,7 +157,7 @@ const Invoice = () => {
               </tr>
             </thead>
             <tbody>
-              {invoice.feeBreakdown.map((fee, idx) => (
+              {invoice.feeBreakdown && invoice.feeBreakdown.map((fee, idx) => (
                 <tr key={idx}>
                   <td>{fee.description}</td>
                   <td className="text-right">₹{fee.amount.toLocaleString()}</td>

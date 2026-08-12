@@ -1,48 +1,120 @@
-import { useState } from 'react';
+/* eslint-disable react-hooks/set-state-in-effect */
+import { useState, useEffect, useCallback } from 'react';
+import { useParams } from 'react-router-dom';
 import RazorpayPaymentModal from './RazorpayPaymentModal';
 import '../styles/payment-page.css';
-
-/**
- * Sample Payment Page Component
- * Demonstrates how to use RazorpayPaymentModal
- */
+import { fetchInvoiceDetails } from '../services/apiService';
 
 function PaymentPage() {
+  const { invoiceId } = useParams();
   const [paymentStatus, setPaymentStatus] = useState(null);
   const [paymentDetails, setPaymentDetails] = useState(null);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [feeData, setFeeData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
-  // Sample fee data (would come from backend/database in real app)
-  const feeData = {
-    studentName: 'John Doe',
-    studentId: 'STU001',
-    amount: 5000, // ₹5000
-    invoiceId: 'INV2024001',
-    totalAmount: 10000, // Total fee
-  };
+  const loadInvoiceData = useCallback(async () => {
+    setLoading(true)
+    setError('')
+    try {
+      const result = await fetchInvoiceDetails(invoiceId)
+      if (result.success && result.data) {
+        const data = result.data
+        setFeeData({
+          studentName: data.studentName,
+          studentId: data.rollNumber,
+          amount: data.totalAmount - (data.paidAmount || data.amountPaid || 0),
+          invoiceId: data.invoiceId,
+          totalAmount: data.totalAmount,
+        })
+      } else {
+        setError(result.error || 'Invoice not found')
+      }
+    } catch {
+      setError('Failed to load invoice data')
+    } finally {
+      setLoading(false)
+    }
+  }, [invoiceId])
+
+  useEffect(() => {
+    if (invoiceId) {
+      loadInvoiceData()
+    }
+  }, [invoiceId, loadInvoiceData])
 
   const handlePaymentSuccess = (paymentData) => {
-    console.log('✅ Payment successful:', paymentData);
+    console.log('✅ Payment successful:', paymentData)
     setPaymentStatus('success');
     setPaymentDetails(paymentData);
 
-    // TODO: In real app:
-    // 1. Show success message
-    // 2. Update fee status in database
-    // 3. Send confirmation email
-    // 4. Redirect to receipt/dashboard
+    if (invoiceId && paymentData.amount) {
+      recordPaymentOnBackend(invoiceId, paymentData)
+    }
   };
+
+  const recordPaymentOnBackend = async (invId, paymentData) => {
+    try {
+      const { recordPayment } = await import('../services/apiService')
+      const result = await recordPayment(
+        invId,
+        paymentData.amount,
+        'ONLINE',
+        paymentData.paymentId,
+        `Razorpay payment - Order: ${paymentData.orderId}`
+      )
+      if (result.success) {
+        console.log('✅ Payment recorded in backend')
+      }
+    } catch (error) {
+      console.error('❌ Error recording payment:', error)
+    }
+  }
 
   const handlePaymentFailure = (error) => {
-    console.error('❌ Payment failed:', error);
+    console.error('❌ Payment failed:', error)
     setPaymentStatus('failure');
     setPaymentDetails(error);
-
-    // TODO: In real app:
-    // 1. Show error message
-    // 2. Retry option
-    // 3. Contact support
   };
+
+  if (loading) {
+    return (
+      <div className="payment-page-container">
+        <div className="payment-page-header">
+          <h1>Fee Payment</h1>
+          <p>Secure payment powered by Razorpay</p>
+        </div>
+        <div className="payment-page-content">
+          <div className="card">
+            <div className="card-body text-center">
+              <div className="spinner" style={{ margin: '0 auto 20px' }}></div>
+              <p>Loading invoice details...</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (error || !feeData) {
+    return (
+      <div className="payment-page-container">
+        <div className="payment-page-header">
+          <h1>Fee Payment</h1>
+          <p>Secure payment powered by Razorpay</p>
+        </div>
+        <div className="payment-page-content">
+          <div className="card">
+            <div className="card-body text-center">
+              <h3>Error Loading Invoice</h3>
+              <p>{error || 'Invoice not found'}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="payment-page-container">
@@ -118,7 +190,6 @@ function PaymentPage() {
               studentId={feeData.studentId}
               amount={feeData.amount}
               invoiceId={feeData.invoiceId}
-              totalAmount={feeData.totalAmount}
               onSuccess={handlePaymentSuccess}
               onFailure={handlePaymentFailure}
             />

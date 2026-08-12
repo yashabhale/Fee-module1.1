@@ -1,6 +1,8 @@
-import React, { useState } from 'react' // Removed unused useCallback
+/* eslint-disable react-hooks/set-state-in-effect */
+import React, { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ArrowLeft, DollarSign, FileText, CreditCard, Users, CheckCircle, Clock, Upload, Download, X, File, AlertCircle } from 'lucide-react'
+import { uploadBulkFile, getBulkUploadLogs } from '../services/apiService'
 
 const BulkUpload = () => {
   const navigate = useNavigate()
@@ -11,13 +13,8 @@ const BulkUpload = () => {
   const [uploadProgress, setUploadProgress] = useState(0)
   const [isUploading, setIsUploading] = useState(false)
   const [previewData, setPreviewData] = useState(null)
-
-  const [uploads] = useState([
-    { id: 1, type: 'Fee Structure', fileName: 'q1_fees_2024.csv', records: 120, status: 'Success', uploadedBy: 'Admin User', time: '2024-03-13 10:30 AM' },
-    { id: 2, type: 'Bulk Invoices', fileName: 'march_invoices.csv', records: 450, status: 'Success', uploadedBy: 'Admin User', time: '2024-03-12 02:15 PM' },
-    { id: 3, type: 'Payment Records', fileName: 'payments_feb_2024.csv', records: 328, status: 'Success', uploadedBy: 'Finance Manager', time: '2024-03-10 11:45 AM' },
-    { id: 4, type: 'Student Data', fileName: 'new_admissions.csv', records: 45, status: 'Processing', uploadedBy: 'Admin User', time: '2024-03-09 09:20 AM' },
-  ])
+  const [uploads, setUploads] = useState([])
+  const [loading, setLoading] = useState(true)
 
   const uploadCards = [
     {
@@ -62,18 +59,45 @@ const BulkUpload = () => {
     },
   ]
 
+  const loadUploadLogs = useCallback(async () => {
+    setLoading(true)
+    try {
+      const result = await getBulkUploadLogs(1, 20)
+      if (result.success && Array.isArray(result.data)) {
+        const transformed = result.data.map((log) => ({
+          id: log.id,
+          type: log.fileName?.replace(/_/g, ' ').replace('.csv', '').replace(/\b\w/g, l => l.toUpperCase()) || 'Unknown',
+          fileName: log.fileName,
+          records: log.totalRecords || 0,
+          status: log.status === 'COMPLETED' ? 'Success' : 'Processing',
+          uploadedBy: log.uploadedBy || 'Admin User',
+          time: log.createdAt ? new Date(log.createdAt).toLocaleString() : 'N/A',
+        }))
+        setUploads(transformed)
+      }
+    } catch (error) {
+      console.error('Error loading upload logs:', error)
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    loadUploadLogs()
+  }, [loadUploadLogs])
+
   const handleBackToDashboard = () => {
     navigate('/')
   }
 
   const getCardTypeKey = (cardTitle) => {
     const typeMap = {
-      'Fee Structure': 'feeStructure',
+      'Fee Structure': 'fee-structures',
       'Bulk Invoices': 'invoices',
       'Payment Records': 'payments',
       'Student Data': 'students',
     }
-    return typeMap[cardTitle] || 'feeStructure'
+    return typeMap[cardTitle] || 'fee-structures'
   }
 
   const openModal = (cardTitle) => {
@@ -150,7 +174,7 @@ const BulkUpload = () => {
   }
 
   const downloadTemplate = () => {
-    if (!selectedCard) return // Added guard clause
+    if (!selectedCard) return
     
     const selectedCardData = uploadCards.find(card => getCardTypeKey(card.title) === selectedCard)
     if (!selectedCardData) return
@@ -174,29 +198,37 @@ const BulkUpload = () => {
     if (!selectedFile) return
     
     setIsUploading(true)
-    
-    // Simulate upload progress
-    for (let i = 0; i <= 100; i += 10) {
-      await new Promise(resolve => setTimeout(resolve, 200))
-      setUploadProgress(i)
-    }
-    
-    // Simulate API call
-    setTimeout(() => {
+    setUploadProgress(0)
+
+    try {
+      const result = await uploadBulkFile(selectedCard, selectedFile)
+      
+      if (result.success) {
+        setUploadProgress(100)
+        setTimeout(() => {
+          setIsUploading(false)
+          alert("File uploaded successfully!")
+          closeModal()
+          loadUploadLogs()
+        }, 500)
+      } else {
+        setIsUploading(false)
+        alert(result.error || 'Upload failed')
+      }
+    } catch (error) {
       setIsUploading(false)
-      alert("File uploaded successfully!")
-      closeModal()
-    }, 500)
+      alert('Upload failed: ' + error.message)
+    }
   }
 
   const getCurrentCard = () => {
-    if (!selectedCard) return null // Added guard clause
+    if (!selectedCard) return null
     
     const typeMap = {
-      feeStructure: 'Fee Structure',
-      invoices: 'Bulk Invoices',
-      payments: 'Payment Records',
-      students: 'Student Data'
+      'fee-structures': 'Fee Structure',
+      'invoices': 'Bulk Invoices',
+      'payments': 'Payment Records',
+      'students': 'Student Data'
     }
     const title = typeMap[selectedCard] || 'Fee Structure'
     return uploadCards.find(card => card.title === title)
@@ -273,7 +305,13 @@ const BulkUpload = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {uploads.map((upload) => (
+                  {loading ? (
+                    <tr>
+                      <td colSpan="6" style={{ textAlign: 'center', padding: '40px' }}>
+                        <div className="spinner"></div>
+                      </td>
+                    </tr>
+                  ) : uploads.map((upload) => (
                     <tr key={upload.id}>
                       <td className="td-bold">{upload.type}</td>
                       <td>

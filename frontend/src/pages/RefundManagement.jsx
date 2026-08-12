@@ -1,49 +1,57 @@
-import { useState } from 'react';
+/* eslint-disable react-hooks/set-state-in-effect */
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Search, CheckCircle, XCircle, Clock, FileText, Download } from 'lucide-react';
+import { fetchRefundRequests, approveRefundRequest, rejectRefundRequest, processRefund } from '../services/apiService';
 
 function RefundManagement() {
   const navigate = useNavigate();
   const [activeCard, setActiveCard] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(false);
-  const [refunds, setRefunds] = useState([
-    {
-      id: 'REF-2024-001',
-      studentName: 'Aarav Sharma',
-      invoiceId: 'INV-2024-015',
-      amount: 25000,
-      reason: 'Duplicate Payment',
-      status: 'Pending',
-      requestedDate: '2024-03-08',
-    },
-    {
-      id: 'REF-2024-002',
-      studentName: 'Priya Kapoor',
-      invoiceId: 'INV-2024-018',
-      amount: 15000,
-      reason: 'Student Withdrawal',
-      status: 'Approved',
-      requestedDate: '2024-03-07',
-    },
-    {
-      id: 'REF-2024-003',
-      studentName: 'Rahul Verma',
-      invoiceId: 'INV-2024-020',
-      amount: 8000,
-      reason: 'Overpayment',
-      status: 'Processed',
-      requestedDate: '2024-03-06',
-    },
-  ]);
+  const [refunds, setRefunds] = useState([]);
+  const [stats, setStats] = useState({
+    all: 0,
+    pending: 0,
+    approved: 0,
+    rejected: 0,
+    processed: 0,
+  });
 
-  const stats = {
-    all: refunds.length,
-    pending: refunds.filter((r) => r.status === 'Pending').length,
-    approved: refunds.filter((r) => r.status === 'Approved').length,
-    rejected: refunds.filter((r) => r.status === 'Rejected').length,
-    processed: refunds.filter((r) => r.status === 'Processed').length,
-  };
+  const loadRefunds = useCallback(async () => {
+    setLoading(true)
+    try {
+      const result = await fetchRefundRequests({ page: 1, limit: 100 })
+      if (result.success && Array.isArray(result.data)) {
+        const transformed = result.data.map((r) => ({
+          id: r.id,
+          studentName: `${r.student?.firstName || ''} ${r.student?.lastName || ''}`.trim() || 'Unknown',
+          invoiceId: r.feePayment?.id || 'N/A',
+          amount: Number(r.amount || 0),
+          reason: r.reason || 'Other',
+          status: r.status || 'Pending',
+          requestedDate: r.requestDate ? new Date(r.requestDate).toISOString().split('T')[0] : 'N/A',
+          adminNotes: r.notes || '',
+        }))
+        setRefunds(transformed)
+        setStats({
+          all: transformed.length,
+          pending: transformed.filter((r) => r.status === 'PENDING').length,
+          approved: transformed.filter((r) => r.status === 'APPROVED').length,
+          rejected: transformed.filter((r) => r.status === 'REJECTED').length,
+          processed: transformed.filter((r) => r.status === 'PROCESSED').length,
+        })
+      }
+    } catch (error) {
+      console.error('Error loading refunds:', error)
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    loadRefunds()
+  }, [loadRefunds])
 
   const filteredRefunds = refunds.filter(
     (refund) =>
@@ -54,36 +62,49 @@ function RefundManagement() {
 
   const getStatusBadgeClass = (status) => {
     const classes = {
-      Pending: 'badge-status-pending',
-      Approved: 'badge-status-approved',
-      Rejected: 'badge-status-rejected',
-      Processed: 'badge-status-processed',
+      PENDING: 'badge-status-pending',
+      APPROVED: 'badge-status-approved',
+      REJECTED: 'badge-status-rejected',
+      PROCESSED: 'badge-status-processed',
     };
     return classes[status] || 'badge-gray';
   };
 
-  const handleApproveAll = () => {
-    setRefunds((prev) =>
-      prev.map((r) => (r.status === 'Pending' ? { ...r, status: 'Approved' } : r))
-    );
+  const handleApproveAll = async () => {
+    const pendingRefunds = refunds.filter(r => r.status === 'PENDING')
+    for (const refund of pendingRefunds) {
+      await handleApprove(refund)
+    }
+  }
+
+  const handleApprove = async (refund) => {
+    const result = await approveRefundRequest(refund.id, { notes: refund.adminNotes })
+    if (result.success) {
+      setRefunds((prev) =>
+        prev.map((r) => (r.id === refund.id ? { ...r, status: 'APPROVED' } : r))
+      )
+    }
   };
 
-  const handleApprove = (refund) => {
-    setRefunds((prev) =>
-      prev.map((r) => (r.id === refund.id ? { ...r, status: 'Approved' } : r))
-    );
+  const handleReject = async (refund) => {
+    const result = await rejectRefundRequest(refund.id, 'Rejected by admin')
+    if (result.success) {
+      setRefunds((prev) =>
+        prev.map((r) => (r.id === refund.id ? { ...r, status: 'REJECTED' } : r))
+      )
+    }
   };
 
-  const handleReject = (refund) => {
-    setRefunds((prev) =>
-      prev.map((r) => (r.id === refund.id ? { ...r, status: 'Rejected' } : r))
-    );
-  };
-
-  const handleProcess = (refund) => {
-    setRefunds((prev) =>
-      prev.map((r) => (r.id === refund.id ? { ...r, status: 'Processed' } : r))
-    );
+  const handleProcess = async (refund) => {
+    const result = await processRefund(refund.id, {
+      refundMethod: 'BANK_TRANSFER',
+      bankDetails: {}
+    })
+    if (result.success) {
+      setRefunds((prev) =>
+        prev.map((r) => (r.id === refund.id ? { ...r, status: 'PROCESSED' } : r))
+      )
+    }
   };
 
   const handleView = (refund) => {
@@ -227,7 +248,7 @@ function RefundManagement() {
                           >
                             <FileText size={14} />
                           </button>
-                          {refund.status === 'Pending' && (
+                          {refund.status === 'PENDING' && (
                             <>
                               <button 
                                 className="btn btn-ghost btn-sm refund-action-btn"
@@ -245,7 +266,7 @@ function RefundManagement() {
                               </button>
                             </>
                           )}
-                          {refund.status === 'Approved' && (
+                          {refund.status === 'APPROVED' && (
                             <button 
                               className="btn btn-primary btn-sm"
                               onClick={() => handleProcess(refund)}

@@ -1,23 +1,135 @@
-import React, { useState } from 'react'
+/* eslint-disable react-hooks/set-state-in-effect */
+import React, { useState, useEffect, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { ArrowLeft, Download, AlertCircle, CheckCircle } from 'lucide-react'
-import { getInvoiceById, generateTransactionId } from '../data/invoiceData'
-import { getTransactionById } from '../data/transactionsData'
+import { fetchInvoiceDetails, getPaymentHistory } from '../services/apiService'
 
 const Receipt = () => {
   const { invoiceId } = useParams()
   const navigate = useNavigate()
+  const [invoice, setInvoice] = useState(null)
+  const [paymentHistory, setPaymentHistory] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
 
-  const [invoice] = useState(() => getInvoiceById(invoiceId))
-  const [transaction] = useState(() => getTransactionById(invoiceId))
+  const loadInvoiceData = useCallback(async () => {
+    setLoading(true)
+    setError('')
+    try {
+      const [invoiceResult, historyResult] = await Promise.all([
+        fetchInvoiceDetails(invoiceId),
+        getPaymentHistory(invoiceId)
+      ])
 
-  if (!invoice || !transaction) {
+      if (invoiceResult.success && invoiceResult.data) {
+        setInvoice(invoiceResult.data)
+      } else {
+        setError(invoiceResult.error || 'Invoice not found')
+      }
+
+      if (historyResult.success && historyResult.data) {
+        setPaymentHistory(historyResult.data)
+      }
+    } catch {
+      setError('Failed to load receipt data')
+    } finally {
+      setLoading(false)
+    }
+  }, [invoiceId])
+
+  useEffect(() => {
+    loadInvoiceData()
+  }, [loadInvoiceData])
+
+  const handleDownloadReceipt = () => {
+    if (!invoice) return
+
+    const recentPayment = paymentHistory?.payments?.[0] || invoice.payments?.[0]
+
+    const receiptText = `
+╔════════════════════════════════════════════════════════════════════╗
+║                         PAYMENT RECEIPT                           ║
+║                    Sacred Tree International School                ║
+╚════════════════════════════════════════════════════════════════════╝
+
+INVOICE DETAILS:
+────────────────────────────────────────────────────────────────────
+Invoice ID:                    ${invoice.invoiceId}
+Invoice Date:                  ${invoice.invoiceDate}
+Receipt Generated:             ${new Date().toLocaleDateString()}
+
+STUDENT INFORMATION:
+────────────────────────────────────────────────────────────────────
+Student Name:                  ${invoice.studentName}
+Class/Section:                 ${invoice.class}
+Roll Number:                   ${invoice.rollNumber}
+
+PARENT INFORMATION:
+────────────────────────────────────────────────────────────────────
+Parent Name:                   ${invoice.parentName || 'N/A'}
+Email:                         ${invoice.email || 'N/A'}
+Phone:                         ${invoice.phone || 'N/A'}
+
+PAYMENT DETAILS:
+────────────────────────────────────────────────────────────────────
+Payment Method:                ${recentPayment?.paymentMethod || 'N/A'}
+Transaction ID:                ${recentPayment?.transactionId || recentPayment?.id || 'N/A'}
+Payment Date:                  ${recentPayment?.createdAt ? new Date(recentPayment.createdAt).toLocaleDateString() : 'N/A'}
+Payment Time:                  ${new Date().toLocaleTimeString()}
+
+FEE BREAKDOWN:
+────────────────────────────────────────────────────────────────────
+${invoice.feeBreakdown?.map((fee) => `${fee.description.padEnd(30)} ₹${fee.amount.toLocaleString().padStart(10)}`).join('\n') || 'N/A'}
+────────────────────────────────────────────────────────────────────
+TOTAL AMOUNT PAID:             ₹${(invoice.paidAmount || invoice.amountPaid || 0).toLocaleString()}
+
+PAYMENT STATUS:
+────────────────────────────────────────────────────────────────────
+Status:                        ✓ PAID
+Amount Paid:                   ₹${(invoice.paidAmount || invoice.amountPaid || 0).toLocaleString()}
+Outstanding Amount:            ₹0.00
+
+TERMS & CONDITIONS:
+────────────────────────────────────────────────────────────────────
+• This is an electronically generated receipt and is as valid as an
+  original receipt.
+• The payment has been successfully processed and credited to your
+  student account.
+• Keep this receipt for your records and verification purposes.
+• For any discrepancies, contact the accounts department immediately.
+
+════════════════════════════════════════════════════════════════════
+Thank you for your payment! Your child's education is our priority.
+════════════════════════════════════════════════════════════════════
+    `.trim()
+
+    const element = document.createElement('a')
+    const file = new Blob([receiptText], { type: 'text/plain' })
+    element.href = URL.createObjectURL(file)
+    element.download = `Receipt_${invoiceId}.txt`
+    document.body.appendChild(element)
+    element.click()
+    document.body.removeChild(element)
+  }
+
+  if (loading) {
+    return (
+      <div className="receipt-page" style={{ padding: '40px 20px', minHeight: '100vh', backgroundColor: '#f8f9fa', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ backgroundColor: '#fff', borderRadius: '12px', boxShadow: '0 2px 12px rgba(0,0,0,0.1)', padding: '40px', textAlign: 'center', maxWidth: '500px' }}>
+          <div className="spinner" style={{ margin: '0 auto 20px' }}></div>
+          <p>Loading receipt...</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (error || !invoice) {
     return (
       <div className="receipt-page" style={{ padding: '40px 20px', minHeight: '100vh', backgroundColor: '#f8f9fa', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <div style={{ backgroundColor: '#fff', borderRadius: '12px', boxShadow: '0 2px 12px rgba(0,0,0,0.1)', padding: '40px', textAlign: 'center', maxWidth: '500px' }}>
           <AlertCircle size={40} style={{ color: '#dc3545', marginBottom: '20px' }} />
           <h2>Receipt Not Found</h2>
-          <p style={{ marginBottom: '20px', color: '#666' }}>The receipt for {invoiceId} does not exist in our records.</p>
+          <p style={{ marginBottom: '20px', color: '#666' }}>{error || `The receipt for ${invoiceId} does not exist in our records.`}</p>
           <button onClick={() => navigate('/')} style={{ padding: '10px 24px', backgroundColor: '#28a745', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: '600' }}>
             Back to Dashboard
           </button>
@@ -26,72 +138,7 @@ const Receipt = () => {
     )
   }
 
-  const handleDownloadReceipt = () => {
-    const receiptText = `
-╔════════════════════════════════════════════════════════════════════╗
-║                         PAYMENT RECEIPT                           ║
-║                    Sacred Tree International School                ║
-╚════════════════════════════════════════════════════════════════════╝
-
-INVOICE DETAILS:
-─────────────────────────────────────────────────────────────────────
-Invoice ID:                    ${invoice.invoiceId}
-Invoice Date:                  ${invoice.invoiceDate}
-Receipt Generated:             ${new Date().toLocaleDateString()}
-
-STUDENT INFORMATION:
-─────────────────────────────────────────────────────────────────────
-Student Name:                  ${invoice.studentName}
-Class/Section:                 ${invoice.class}
-Roll Number:                   ${invoice.rollNumber}
-
-PARENT INFORMATION:
-─────────────────────────────────────────────────────────────────────
-Parent Name:                   ${invoice.parentName}
-Email:                         ${invoice.email}
-Phone:                         ${invoice.phone}
-
-PAYMENT DETAILS:
-─────────────────────────────────────────────────────────────────────
-Payment Method:                ${transaction.paymentMethod}
-Transaction ID:                ${transaction.id ? `TXN-${Date.now()}-${Math.random().toString(36).substring(2, 9).toUpperCase()}` : 'N/A'}
-Payment Date:                  ${transaction.date}
-Payment Time:                  ${new Date().toLocaleTimeString()}
-
-FEE BREAKDOWN:
-─────────────────────────────────────────────────────────────────────
-${invoice.feeBreakdown.map((fee) => `${fee.description.padEnd(30)} ₹${fee.amount.toLocaleString().padStart(10)}`).join('\n')}
-─────────────────────────────────────────────────────────────────────
-TOTAL AMOUNT PAID:             ₹${invoice.totalAmount.toLocaleString()}
-
-PAYMENT STATUS:
-─────────────────────────────────────────────────────────────────────
-Status:                        ✓ PAID
-Amount Paid:                   ₹${invoice.totalAmount.toLocaleString()}
-Outstanding Amount:            ₹0.00
-
-TERMS & CONDITIONS:
-─────────────────────────────────────────────────────────────────────
-• This is an electronically generated receipt and is as valid as an
-  original receipt.
-• The payment has been successfully processed and credited to your
-  student account.
-• Keep this receipt for your records and verification purposes.
-• For any discrepancies, contact the accounts department immediately.
-
-═════════════════════════════════════════════════════════════════════
-Thank you for your payment! Your child's education is our priority.
-═════════════════════════════════════════════════════════════════════
-    `
-
-    const element = document.createElement('a')
-    const file = new Blob([receiptText], { type: 'text/plain' })
-    element.href = URL.createObjectURL(file)
-    element.download = `Receipt_${invoice.invoiceId}.txt`
-    document.body.appendChild(element)
-    element.click()
-    document.body.removeChild(element)
-  }
+  const recentPayment = paymentHistory?.payments?.[0] || invoice.payments?.[0]
 
   return (
     <div className="receipt-page" style={{ padding: '20px', minHeight: '100vh', backgroundColor: '#f8f9fa' }}>
@@ -161,15 +208,15 @@ Thank you for your payment! Your child's education is our priority.
               <h4 style={{ margin: '0 0 15px 0', color: '#333' }}>Payment Details</h4>
               <div style={{ marginBottom: '12px' }}>
                 <span style={{ color: '#666', fontSize: '12px', fontWeight: '600' }}>Payment Method</span>
-                <p style={{ margin: '4px 0 0 0', color: '#333', fontSize: '14px' }}>{transaction.paymentMethod}</p>
+                <p style={{ margin: '4px 0 0 0', color: '#333', fontSize: '14px' }}>{recentPayment?.paymentMethod || 'N/A'}</p>
               </div>
               <div style={{ marginBottom: '12px' }}>
                 <span style={{ color: '#666', fontSize: '12px', fontWeight: '600' }}>Payment Date</span>
-                <p style={{ margin: '4px 0 0 0', color: '#333', fontSize: '14px' }}>{transaction.date}</p>
+                <p style={{ margin: '4px 0 0 0', color: '#333', fontSize: '14px' }}>{recentPayment?.createdAt ? new Date(recentPayment.createdAt).toLocaleDateString() : 'N/A'}</p>
               </div>
               <div>
                 <span style={{ color: '#666', fontSize: '12px', fontWeight: '600' }}>Transaction ID</span>
-                <p style={{ margin: '4px 0 0 0', color: '#28a745', fontSize: '12px', fontFamily: 'monospace' }}>TXN-{Date.now().toString().slice(-6)}</p>
+                <p style={{ margin: '4px 0 0 0', color: '#28a745', fontSize: '12px', fontFamily: 'monospace' }}>{recentPayment?.transactionId || recentPayment?.id || 'N/A'}</p>
               </div>
             </div>
           </div>
@@ -192,7 +239,7 @@ Thank you for your payment! Your child's education is our priority.
               </div>
               <div>
                 <span style={{ color: '#666' }}>Email:</span>
-                <p style={{ margin: '2px 0 0 0', color: '#333' }}>{invoice.email}</p>
+                <p style={{ margin: '2px 0 0 0', color: '#333' }}>{invoice.email || 'N/A'}</p>
               </div>
             </div>
           </div>
@@ -202,7 +249,7 @@ Thank you for your payment! Your child's education is our priority.
             <h4 style={{ margin: '0 0 12px 0', color: '#333' }}>Fee Breakdown</h4>
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <tbody>
-                {invoice.feeBreakdown.map((fee, idx) => (
+                {invoice.feeBreakdown?.map((fee, idx) => (
                   <tr key={idx} style={{ borderBottom: '1px solid #eee' }}>
                     <td style={{ padding: '10px 0', color: '#333', fontSize: '13px' }}>{fee.description}</td>
                     <td style={{ padding: '10px 0', textAlign: 'right', color: '#333', fontWeight: '600', fontSize: '13px' }}>₹{fee.amount.toLocaleString()}</td>
@@ -212,7 +259,7 @@ Thank you for your payment! Your child's education is our priority.
             </table>
             <div style={{ display: 'flex', justifyContent: 'space-between', padding: '15px 0', borderTop: '2px solid #dee2e6', marginTop: '10px' }}>
               <span style={{ color: '#333', fontWeight: '600', fontSize: '14px' }}>Total Amount Paid</span>
-              <span style={{ color: '#28a745', fontWeight: 'bold', fontSize: '16px' }}>₹{invoice.totalAmount.toLocaleString()}</span>
+              <span style={{ color: '#28a745', fontWeight: 'bold', fontSize: '16px' }}>₹{(invoice.paidAmount || invoice.amountPaid || 0).toLocaleString()}</span>
             </div>
           </div>
 

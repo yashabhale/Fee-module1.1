@@ -12,6 +12,10 @@ import feePaymentRoutes from './routes/feePaymentRoutes';
 import refundRoutes from './routes/refundRoutes';
 import reportRoutes from './routes/reportRoutes';
 import dashboardRoutes from './routes/dashboardRoutes';
+import invoiceRoutes from './routes/invoiceRoutes';
+import paymentRoutes from './routes/paymentRoutes';
+import notificationRoutes from './routes/notificationRoutes';
+import bulkUploadRoutes from './routes/bulkUploadRoutes';
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -53,6 +57,10 @@ app.use('/api/fee-payments', feePaymentRoutes);
 app.use('/api/refunds', refundRoutes);
 app.use('/api/reports', reportRoutes);
 app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/invoices', invoiceRoutes);
+app.use('/api/payments', paymentRoutes);
+app.use('/api/notifications', notificationRoutes);
+app.use('/api/bulk-upload', bulkUploadRoutes);
 
 // 404 handler
 app.use((req: Request, res: Response) => {

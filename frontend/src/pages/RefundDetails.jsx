@@ -1,33 +1,69 @@
+/* eslint-disable react-hooks/set-state-in-effect */
 import { useParams, useNavigate } from 'react-router-dom'
-import { useState } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { ArrowLeft, User, FileText, Clock, AlertCircle, CheckCircle, XCircle } from 'lucide-react'
+import { fetchRefundById, approveRefundRequest, rejectRefundRequest, processRefund } from '../services/apiService'
 
 function RefundDetails() {
   const { id } = useParams()
   const navigate = useNavigate()
 
-  // Mock data - in real app, fetch from API based on id
-  const [refund, setRefund] = useState({
-    id: id || 'REF-2024-001',
-    studentName: 'Aarav Sharma',
-    invoiceId: 'INV-2024-015',
-    amount: 25000,
-    reason: 'Duplicate Payment',
-    status: 'Pending',
-    requestedDate: '2024-03-08',
-    adminNotes: ''
-  })
+  const [refund, setRefund] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
 
-  const handleApprove = () => {
-    setRefund(prev => ({ ...prev, status: 'Approved' }))
+  const loadRefund = useCallback(async () => {
+    setLoading(true)
+    setError('')
+    try {
+      const result = await fetchRefundById(id)
+      if (result.success && result.data) {
+        setRefund({
+          id: result.data.id,
+          studentName: `${result.data.student?.firstName || ''} ${result.data.student?.lastName || ''}`.trim() || 'Unknown',
+          invoiceId: result.data.feePayment?.id || 'N/A',
+          amount: Number(result.data.amount || 0),
+          reason: result.data.reason || 'Other',
+          status: result.data.status || 'Pending',
+          requestedDate: result.data.requestDate ? new Date(result.data.requestDate).toISOString().split('T')[0] : 'N/A',
+          adminNotes: result.data.notes || '',
+        })
+      } else {
+        setError(result.error || 'Refund not found')
+      }
+    } catch {
+      setError('Failed to load refund details')
+    } finally {
+      setLoading(false)
+    }
+  }, [id])
+
+  useEffect(() => {
+    loadRefund()
+  }, [loadRefund])
+
+  const handleApprove = async () => {
+    const result = await approveRefundRequest(refund.id, { notes: refund.adminNotes })
+    if (result.success) {
+      setRefund(prev => ({ ...prev, status: 'APPROVED' }))
+    }
   }
 
-  const handleReject = () => {
-    setRefund(prev => ({ ...prev, status: 'Rejected' }))
+  const handleReject = async () => {
+    const result = await rejectRefundRequest(refund.id, 'Rejected by admin')
+    if (result.success) {
+      setRefund(prev => ({ ...prev, status: 'REJECTED' }))
+    }
   }
 
-  const handleProcess = () => {
-    setRefund(prev => ({ ...prev, status: 'Processed' }))
+  const handleProcess = async () => {
+    const result = await processRefund(refund.id, {
+      refundMethod: 'BANK_TRANSFER',
+      bankDetails: {}
+    })
+    if (result.success) {
+      setRefund(prev => ({ ...prev, status: 'PROCESSED' }))
+    }
   }
 
   const handleNotesChange = (e) => {
@@ -40,13 +76,13 @@ function RefundDetails() {
 
   const getStatusBadgeClass = (status) => {
     switch(status) {
-      case 'Pending':
+      case 'PENDING':
         return 'badge-status-pending'
-      case 'Approved':
+      case 'APPROVED':
         return 'badge-status-approved'
-      case 'Rejected':
+      case 'REJECTED':
         return 'badge-status-rejected'
-      case 'Processed':
+      case 'PROCESSED':
         return 'badge-status-processed'
       default:
         return 'badge-gray'
@@ -55,17 +91,47 @@ function RefundDetails() {
 
   const getStatusIcon = (status) => {
     switch(status) {
-      case 'Pending':
+      case 'PENDING':
         return <Clock size={16} />
-      case 'Approved':
+      case 'APPROVED':
         return <CheckCircle size={16} />
-      case 'Rejected':
+      case 'REJECTED':
         return <XCircle size={16} />
-      case 'Processed':
+      case 'PROCESSED':
         return <CheckCircle size={16} />
       default:
         return null
     }
+  }
+
+  if (loading) {
+    return (
+      <div className="page">
+        <div className="card">
+          <div className="card-body text-center">
+            <div className="spinner" style={{ margin: '0 auto 20px' }}></div>
+            <p>Loading refund details...</p>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (error || !refund) {
+    return (
+      <div className="page">
+        <div className="card">
+          <div className="card-body" style={{ textAlign: 'center', padding: '40px' }}>
+            <AlertCircle size={40} style={{ color: 'var(--red)', marginBottom: '16px' }} />
+            <h2 className="card-title">Refund Not Found</h2>
+            <p className="text-muted mb-4">{error || `The refund request ${id} does not exist.`}</p>
+            <button onClick={() => navigate('/refund-management')} className="btn btn-primary">
+              Back to Refund Management
+            </button>
+          </div>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -172,7 +238,7 @@ function RefundDetails() {
             <button className="btn btn-outline" onClick={handleClose}>
               Close
             </button>
-            {refund.status === 'Pending' && (
+            {refund.status === 'PENDING' && (
               <>
                 <button className="btn btn-danger" onClick={handleReject}>
                   Reject
@@ -182,7 +248,7 @@ function RefundDetails() {
                 </button>
               </>
             )}
-            {refund.status === 'Approved' && (
+            {refund.status === 'APPROVED' && (
               <button className="btn btn-primary" onClick={handleProcess}>
                 Mark as Processed
               </button>
@@ -192,7 +258,7 @@ function RefundDetails() {
       </div>
 
       {/* Info Box for Guidance */}
-      {refund.status === 'Pending' && (
+      {refund.status === 'PENDING' && (
         <div className="info-box info-box-blue mt-4">
           <AlertCircle size={20} style={{ color: 'var(--blue)', flexShrink: 0 }} />
           <div>

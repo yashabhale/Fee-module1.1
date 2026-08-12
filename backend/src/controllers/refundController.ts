@@ -72,6 +72,18 @@ export const processRefund = asyncHandler(async (req: Request, res: Response) =>
   sendSuccess(res, 'Refund processed successfully', refund, 200);
 });
 
+export const getRefundById = asyncHandler(async (req: Request, res: Response) => {
+  const { id } = req.params;
+
+  const refund = await refundService.getRefundRequestById(id);
+
+  if (!refund) {
+    return sendError(res, 'Refund request not found', [], 404);
+  }
+
+  sendSuccess(res, 'Refund request retrieved successfully', refund, 200);
+});
+
 export const getRefunds = asyncHandler(async (req: Request, res: Response) => {
   const { page, limit, status, courseId } = req.query;
 
