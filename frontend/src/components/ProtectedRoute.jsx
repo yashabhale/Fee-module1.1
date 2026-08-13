@@ -1,26 +1,14 @@
-import { Navigate } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
+import { Navigate, useLocation } from 'react-router-dom'
 
-export function ProtectedRoute({ children }) {
-  const { isAuthenticated, isLoading } = useAuth();
-
-  if (isLoading) {
-    return (
-      <div style={{
-        display: 'flex',
-        justifyContent: 'center',
-        alignItems: 'center',
-        height: '100vh',
-        fontSize: '18px'
-      }}>
-        Loading...
-      </div>
-    );
-  }
+const ProtectedRoute = ({ children }) => {
+  const location = useLocation()
+  const isAuthenticated = localStorage.getItem('fees_auth') === 'true' || sessionStorage.getItem('fees_auth') === 'true'
 
   if (!isAuthenticated) {
-    return <Navigate to="/login" replace />;
+    return <Navigate to="/" replace state={{ from: location }} />
   }
 
-  return children;
+  return children
 }
+
+export default ProtectedRoute
