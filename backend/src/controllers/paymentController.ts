@@ -12,7 +12,7 @@ export const createRazorpayOrder = asyncHandler(async (req: Request, res: Respon
     return sendError(res, 'Valid amount is required', [], 400);
   }
 
-  const order = await paymentService.createRazorpayOrder(amount, currency || 'INR', invoiceId);
+  const order = await paymentService.createRazorpayOrder(amount, currency || 'INR', _invoiceId);
 
   sendSuccess(res, 'Razorpay order created successfully', order, 200);
 });

@@ -57,7 +57,7 @@ export const bulkCreateInvoices = asyncHandler(async (req: Request, res: Respons
   }
 
   const result = await invoiceService.bulkCreateInvoices(
-    invoices.map((inv: Record<string, unknown>) => ({
+    invoices.map((inv: any) => ({
       ...inv,
       approvedBy,
     }))

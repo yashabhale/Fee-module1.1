@@ -1,8 +1,13 @@
 import { Navigate, useLocation } from 'react-router-dom'
+import { useAuth } from '../context/AuthContext'
 
 const ProtectedRoute = ({ children }) => {
   const location = useLocation()
-  const isAuthenticated = localStorage.getItem('fees_auth') === 'true' || sessionStorage.getItem('fees_auth') === 'true'
+  const { isAuthenticated, isLoading } = useAuth()
+
+  if (isLoading) {
+    return <div>Loading...</div>
+  }
 
   if (!isAuthenticated) {
     return <Navigate to="/" replace state={{ from: location }} />
